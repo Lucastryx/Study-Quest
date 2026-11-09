@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Quest - RPG Learning Journey</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: {
+            slate:  { 100:'#f1e6c8', 200:'#e8d9b5', 300:'#d4c29a', 400:'#a8956f', 500:'#7f6f52', 600:'#5e4f39', 700:'#4a3a2a', 800:'#2a2019', 900:'#17120e', 950:'#0e0b09' },
+            indigo: { 300:'#f6c46a', 400:'#f2a33a', 500:'#d9822b', 600:'#b3541e' },
+            purple: { 400:'#e07b39', 500:'#c7622a', 600:'#8f3b1b' },
+            emerald:{ 400:'#7fcf6a', 500:'#5fa35b' },
+            red:    { 400:'#e0574b', 500:'#c0392b' },
+            amber:  { 300:'#f6d27a', 400:'#f2a33a', 500:'#d9822b' },
+            orange: { 500:'#d9822b' }
+        } } } };
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&display=swap');
+        body { font-family: 'Pixelify Sans', 'Courier New', monospace; background-color: #0e0b09; color: #e8d9b5; }
+        .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .door-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .door-card:hover { transform: translateY(-4px); border-color: #6366f1; box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.3); }
+        .boss-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+        .boss-icon { font-size: 4.5rem; line-height: 1; filter: drop-shadow(0 0 18px rgba(239,68,68,.6)); animation: floaty 3s ease-in-out infinite; }
+        @keyframes floaty { 50% { transform: translateY(-6px); } }
+        .boss-icon { position: relative; }
+        .boss-hit { animation: bossHit .5s ease-out; }
+        @keyframes bossHit { 0%{transform:scale(1)} 20%{transform:scale(.8) rotate(-10deg);filter:brightness(2.5) saturate(3) drop-shadow(0 0 25px #fff)} 50%{transform:scale(1.1) rotate(6deg);filter:brightness(1.6)} 100%{transform:scale(1)} }
+        .impact { position:absolute; left:50%; top:50%; font-size:4rem; pointer-events:none; transform:translate(-50%,-50%); animation: impactPop .6s ease-out forwards; }
+        @keyframes impactPop { 0%{opacity:0;transform:translate(-50%,-50%) scale(.3)} 30%{opacity:1;transform:translate(-50%,-50%) scale(1.3)} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.8)} }
+        .screen-shake { animation: quake .45s; }
+        @keyframes quake { 10%,90%{transform:translate(-3px,2px)} 20%,80%{transform:translate(5px,-3px)} 30%,50%,70%{transform:translate(-8px,4px)} 40%,60%{transform:translate(8px,-4px)} }
+
+        /* ===== ROGUELIKE DUNGEON THEME ===== */
+        body {
+            background-image:
+                linear-gradient(rgba(0,0,0,.45) 2px, transparent 2px),
+                linear-gradient(90deg, rgba(0,0,0,.45) 2px, transparent 2px),
+                radial-gradient(circle at 25% 35%, rgba(120,80,40,.10) 0 3px, transparent 4px),
+                radial-gradient(circle at 70% 70%, rgba(120,80,40,.08) 0 2px, transparent 3px);
+            background-size: 64px 32px, 64px 32px, 37px 37px, 53px 53px;
+        }
+        body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index:40;
+            background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.75) 100%); animation: ambient 4s infinite steps(8); }
+        body::after { content:''; position:fixed; inset:0; pointer-events:none; z-index:60;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 1px, transparent 1px 3px); }
+        @keyframes ambient { 0%,100%{opacity:1} 30%{opacity:.88} 60%{opacity:.96} }
+        .torch { position:fixed; top:36%; font-size:2.4rem; z-index:5; text-shadow:0 0 28px #f2a33a, 0 0 60px rgba(242,163,58,.5); animation: torchFlicker 1.1s infinite steps(5); display:none; }
+        .torch.left { left:3%; } .torch.right { right:3%; }
+        @media (min-width: 1000px) { .torch { display:block; } }
+        @keyframes torchFlicker { 0%,100%{transform:scale(1) rotate(-2deg);opacity:1} 25%{transform:scale(1.12) rotate(3deg);opacity:.85} 50%{transform:scale(.94) rotate(-3deg);opacity:1} 75%{transform:scale(1.08) rotate(2deg);opacity:.9} }
+
+        h1, h2, header span.font-extrabold, #bossTitle, #levelBadge, #chapterProgressText,
+        #upgradeModal .text-2xl, #feedbackModal .text-lg { font-family: 'Press Start 2P', monospace !important; line-height: 1.6; letter-spacing: .02em; }
+        h1 { font-size: 1.4rem !important; text-shadow: 3px 3px 0 #000, 0 0 18px rgba(242,163,58,.55); }
+        h2 { font-size: 1rem !important; }
+        header span.font-extrabold { font-size: .8rem !important; }
+        #bossTitle { font-size: 1.1rem !important; text-shadow: 3px 3px 0 #000; }
+        #levelBadge { font-size: .7rem !important; } #chapterProgressText { font-size: .6rem !important; }
+        #upgradeModal .text-2xl { font-size: 1.2rem !important; text-shadow: 3px 3px 0 #000, 0 0 18px #f2a33a; }
+        #feedbackModal .text-lg { font-size: .85rem !important; }
+        .text-xs { font-size: .9rem !important; } .text-sm { font-size: 1rem !important; }
+
+        [class*="rounded"] { border-radius: 0 !important; }
+        .glass-card { background: #17120e !important; backdrop-filter: none !important; border: 3px solid #6b4f35 !important;
+            box-shadow: inset 0 0 0 2px #0e0b09, inset 0 0 0 4px #3a2c1e, 0 6px 0 #050403 !important; }
+        #feedbackModal .glass-card { border-color: #c0392b !important; }
+        #upgradeModal .glass-card { border-color: #f2a33a !important; box-shadow: inset 0 0 0 2px #0e0b09, inset 0 0 0 4px #3a2c1e, 0 0 40px rgba(242,163,58,.35) !important; }
+        input, textarea, select { border-width: 2px !important; border-color: #4a3a2a !important; background: #0e0b09 !important; color: #e8d9b5 !important; font-family: inherit; }
+        input:focus, textarea:focus, select:focus { border-color: #f2a33a !important; box-shadow: 0 0 0 2px rgba(242,163,58,.3); }
+        button { font-family: inherit; }
+        button:not(:disabled):active { transform: translateY(2px); }
+        .bg-indigo-600, .bg-purple-600, .from-indigo-600 { box-shadow: 0 4px 0 #3a1a0c !important; border: 2px solid #f2a33a !important; color: #fff3d6 !important; }
+        .bg-indigo-600, .from-indigo-600 { background-image: none !important; background-color: #b3541e !important; }
+        .bg-indigo-600:hover, .from-indigo-600:hover { background-color: #d9822b !important; }
+        .bg-slate-800 { border: 2px solid #4a3a2a !important; box-shadow: 0 3px 0 #050403; }
+
+        button.door-card { background: linear-gradient(90deg, #3b2614, #5a3a1f 50%, #3b2614) !important; border: 3px solid #8a6a3e !important;
+            border-radius: 48px 48px 0 0 !important; min-height: 150px; position: relative; text-align: center; align-items: center; justify-content: flex-end;
+            box-shadow: inset 0 0 0 3px #1f140b, inset 0 -14px 0 rgba(0,0,0,.35), 0 5px 0 #050403 !important; }
+        button.door-card::after { content:''; position:absolute; right:14px; top:58%; width:10px; height:10px; background:#f2a33a; border:2px solid #1f140b; border-radius:50% !important; }
+        button.door-card:hover { border-color: #f2a33a !important; box-shadow: inset 0 0 0 3px #1f140b, inset 0 -14px 0 rgba(0,0,0,.35), 0 0 22px rgba(242,163,58,.55) !important; transform: translateY(-4px); }
+        .door-card > div:first-child { width:auto !important; height:auto !important; padding:2px 8px; font-family:'Press Start 2P',monospace; font-size:.55rem !important; background:#0e0b09 !important; color:#f2a33a !important; border:2px solid #6b4f35; }
+        button.upgrade-card { background:#1f1710 !important; border:3px solid #6b4f35 !important; transition:.15s; }
+        button.upgrade-card:hover { border-color:#f2a33a !important; box-shadow:0 0 18px rgba(242,163,58,.45) !important; transform:translateY(-3px); }
+        button.boss-answer { border-width: 2px !important; }
+        button.boss-answer:hover:not(:disabled) { background: rgba(192,57,43,.25) !important; border-color:#c0392b !important; }
+
+        #xpBar { background-image: repeating-linear-gradient(90deg, transparent 0 7px, rgba(0,0,0,.45) 7px 9px), linear-gradient(90deg,#f2a33a,#d9822b) !important; }
+        #bossHpBar { background-image: repeating-linear-gradient(90deg, transparent 0 10px, rgba(0,0,0,.5) 10px 12px), linear-gradient(90deg,#c0392b,#e0574b) !important; }
+        #bossShieldBar { background-image: repeating-linear-gradient(90deg, transparent 0 10px, rgba(0,0,0,.5) 10px 12px), linear-gradient(90deg,#4f86b8,#8fc3ea) !important; }
+        .boss-icon.final { font-size: 6rem; filter: drop-shadow(0 0 24px rgba(192,57,43,.9)); }
+        .boss-icon.final::after { content:'👑'; position:absolute; top:-1.4rem; left:50%; transform:translateX(-50%); font-size:2rem; }
+        .boss-icon.enraged { animation: rage .45s infinite; filter: drop-shadow(0 0 30px #ff2a1a) saturate(1.6) contrast(1.15); }
+        .boss-icon.enraged::before { background: radial-gradient(circle, rgba(255,42,26,.7), transparent 70%); }
+        @keyframes rage { 0%,100% { transform: scale(1) rotate(0); } 25% { transform: scale(1.06) rotate(-2deg); } 75% { transform: scale(1.06) rotate(2deg); } }
+        .boss-icon.enraged.boss-hit { animation: bossHit .5s ease-out; }
+        .boss-icon.enraged.boss-shake { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+        #livesContainer i { filter: drop-shadow(2px 2px 0 #000); }
+        .boss-icon { isolation: isolate; }
+        .boss-icon::before { content:''; position:absolute; left:50%; top:50%; width:8rem; height:8rem; transform:translate(-50%,-50%);
+            background: radial-gradient(circle, rgba(192,57,43,.55), transparent 70%); z-index:-1; }
+        #qVisual { border: 4px double #8a6a3e !important; background: #0b0806 !important; box-shadow: inset 0 0 18px #000; }
+        #qVisual { position: relative; z-index: 65; }            /* above scanlines (60) so pictures stay sharp */
+        #qVisual img { image-rendering: auto; filter: none; }
+        #damageFlash { position: fixed; inset: 0; pointer-events: none; z-index: 80; opacity: 0;
+            background: radial-gradient(ellipse at center, rgba(192,57,43,.35), rgba(192,57,43,.8)); }
+        #damageFlash.flash-red { animation: redFlash .55s ease-out; }
+        @keyframes redFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .screen-shake { animation: none !important; } #damageFlash.flash-red { animation-duration: 1s; } }
+        #feedbackModal, #upgradeModal, #loadingOverlay { z-index: 70 !important; } /* modals stay above everything */
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+
+<div class="torch left">🔥</div><div class="torch right">🔥</div>
+<div id="damageFlash"></div>
+
+<!-- TOP HEADER -->
+<header class="p-4 flex justify-between items-center border-b border-slate-800/80 max-w-6xl w-full mx-auto">
+    <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
+            <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <span class="font-extrabold tracking-tight text-lg bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">StudyQuest AI</span>
+    </div>
+    <div class="flex items-center space-x-4">
+        <button id="sfxToggle" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 transition flex items-center gap-2">
+            <i class="fa-solid fa-volume-high text-indigo-400"></i> SFX On
+        </button>
+    </div>
+</header>
+
+<!-- MAIN CONTAINER -->
+<main class="flex-1 max-w-4xl w-full mx-auto p-4 md:p-6 flex flex-col justify-center">
+
+    <!-- SETUP SCREEN -->
+    <div id="setupScreen" class="glass-card p-6 md:p-8 rounded-3xl shadow-2xl relative overflow-hidden">
+        <div class="text-center max-w-xl mx-auto mb-8">
+            <span class="px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-semibold uppercase tracking-wider">Roguelike Study Dungeon</span>
+            <h1 class="text-3xl md:text-4xl font-extrabold mt-3 tracking-tight">STUDY QUEST</h1>
+            <p class="text-slate-400 text-sm mt-2">Turn your notes into a dungeon. Pick a door, dodge the traps, slay the boss, and grow stronger with every floor.</p>
+        </div>
+
+        <div class="space-y-5">
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Study Material & Topics</label>
+                <textarea id="studyTopics" rows="4" placeholder="Paste key topics, questions, bullet points, or lecture notes here... e.g. Mitochondria is the powerhouse, ATP production, Krebs cycle..." class="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition resize-none"></textarea>
+            </div>
+
+            <div class="border-2 border-dashed border-slate-800 rounded-2xl p-4 text-center hover:border-slate-700 transition cursor-pointer bg-slate-900/30" onclick="document.getElementById('fileInput').click()">
+                <i class="fa-solid fa-file-arrow-up text-indigo-400 text-xl mb-1"></i>
+                <div class="text-xs font-medium text-slate-300">Click to upload text/PDF or drop file here</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Supports .txt, .md, .pdf (Max 5MB)</div>
+                <input type="file" id="fileInput" class="hidden" accept=".txt,.md,.pdf">
+                <div id="fileStatus" class="text-xs text-emerald-400 mt-2 font-medium hidden"></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Journey Length</label>
+                    <select id="journeyLength" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                        <option value="1">1 Chapter (Quick Quiz)</option>
+                        <option value="2">2 Chapters (Mini Quest)</option>
+                        <option value="3">3 Chapters (Short Quest)</option>
+                        <option value="4" selected>4 Chapters (Standard Quest)</option>
+                        <option value="5">5 Chapters (Epic Campaign)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Difficulty Class</label>
+                    <select id="journeyDifficulty" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                        <option value="easy">Apprentice (Forgiving doors)</option>
+                        <option value="medium" selected>Scholar (Balanced trial)</option>
+                        <option value="hard">Master (Strict bosses)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- API KEY FIELD (INSERT YOUR KEY HERE OR ON SCREEN) -->
+            <div id="devKeyBox" class="hidden glass-card p-4 rounded-xl space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-indigo-600/20 flex items-center justify-center text-indigo-400">
+                            <i class="fa-solid fa-key text-xs"></i>
+                        </div>
+                        <div>
+                            <div class="font-medium text-sm">Gemini API Key</div>
+                            <div class="text-[11px] text-slate-400">Developer mode: for local testing only. Visitors never see this.</div>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="aiToggle" class="sr-only peer" checked>
+                        <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
+                <input type="password" id="apiKeyInput" placeholder="Paste your AIzaSy... key here" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+
+            <div class="pt-2 flex flex-col md:flex-row gap-3">
+                <button onclick="startCustomQuest()" class="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 font-bold py-3.5 px-6 rounded-xl text-sm tracking-wide transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-dungeon"></i> Descend Into the Dungeon
+                </button>
+                <button onclick="startDemoQuest()" class="bg-slate-800 hover:bg-slate-700 font-semibold py-3.5 px-6 rounded-xl text-sm border border-slate-700 transition flex items-center justify-center gap-2 text-slate-300">
+                    <i class="fa-solid fa-compass"></i> Try Demo (Offline Mode)
+                </button>
+            </div>
+
+            <div class="glass-card p-4 rounded-xl space-y-3">
+                <div class="text-xs font-bold uppercase tracking-wider text-slate-400">No AI? Use your own questions</div>
+                <div class="flex flex-col md:flex-row gap-3">
+                    <button onclick="document.getElementById('importInput').click()" class="flex-1 bg-slate-800 hover:bg-slate-700 font-semibold py-3 px-4 rounded-xl text-sm border border-slate-700 text-slate-300"><i class="fa-solid fa-file-import"></i> Import CSV / JSON</button>
+                    <button onclick="createBlankQuest()" class="flex-1 bg-slate-800 hover:bg-slate-700 font-semibold py-3 px-4 rounded-xl text-sm border border-slate-700 text-slate-300"><i class="fa-solid fa-pen-to-square"></i> Create From Scratch</button>
+                    <button onclick="downloadTemplate()" class="bg-slate-800 hover:bg-slate-700 font-semibold py-3 px-4 rounded-xl text-sm border border-slate-700 text-slate-300"><i class="fa-solid fa-download"></i> CSV Template</button>
+                </div>
+                <input type="file" id="importInput" class="hidden" accept=".csv,.json">
+                <div class="text-[11px] text-slate-500">Imported and hand-made quests open in the review screen first, where you can edit everything. No API key or quota needed.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAMEPLAY SCREEN -->
+    <div id="gameplayScreen" class="hidden space-y-6">
+        <!-- PROGRESS HUD -->
+        <div class="glass-card p-4 rounded-2xl flex flex-wrap gap-3 items-center justify-between">
+            <div class="flex flex-wrap items-center gap-3">
+                <button onclick="exitToMenu()" title="Exit to start screen" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-left"></i> Exit
+                </button>
+                <button onclick="restartQuest()" title="Restart this quest" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 transition">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+                <div class="h-4 w-px bg-slate-800"></div>
+                <div class="flex space-x-1" id="livesContainer"></div>
+                <div class="h-4 w-px bg-slate-800"></div>
+                <div class="flex items-center gap-2 min-w-[9rem]">
+                    <span class="text-xs font-extrabold text-amber-400" id="levelBadge">LV 1</span>
+                    <div class="flex-1">
+                        <div class="h-3 rounded-full bg-slate-800 overflow-hidden border-2 border-slate-700"><div id="xpBar" class="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-500" style="width:0%"></div></div>
+                        <div class="text-[10px] text-slate-500 mt-0.5" id="xpDisplay">0 / 100 XP</div>
+                    </div>
+                </div>
+            </div>
+            <div class="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20" id="chapterProgressText">
+                Floor 1 / 4
+            </div>
+        </div>
+
+        <div id="upgradeBar" class="flex flex-wrap gap-2 text-xs"></div>
+
+        <!-- MAIN ROOM CONTAINER -->
+        <div id="roomContainer" class="glass-card p-6 md:p-8 rounded-3xl min-h-[420px] flex flex-col justify-between"></div>
+    </div>
+
+    <!-- REVIEW SCREEN -->
+    <div id="reviewScreen" class="hidden glass-card p-6 md:p-8 rounded-3xl space-y-6">
+        <div class="text-center">
+            <i class="fa-solid fa-trophy text-4xl text-amber-400 mb-2"></i>
+            <h2 class="text-2xl font-bold">Quest Completed!</h2>
+            <p class="text-slate-400 text-sm mt-1">Here is your review summary of the concepts encountered.</p>
+        </div>
+        <div id="reviewList" class="space-y-3 max-h-96 overflow-y-auto pr-2"></div>
+        <button onclick="replayQuest()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold py-3 rounded-xl text-sm">Replay This Quest</button>
+        <button onclick="returnToStart()" class="w-full bg-indigo-600 hover:bg-indigo-500 font-bold py-3 rounded-xl text-sm">Back to Start Screen</button>
+    </div>
+
+    <!-- REVIEW & EDIT SCREEN -->
+    <div id="editScreen" class="hidden glass-card p-6 md:p-8 rounded-3xl space-y-4">
+        <div>
+            <h2 class="text-2xl font-bold">Review your quest</h2>
+            <p class="text-slate-400 text-sm mt-1">AI can make mistakes. Fix any question or answer, and select the radio button next to the correct option. Use &#10005; to remove a question.</p>
+        </div>
+        <div id="editList" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2"></div>
+        <div class="flex flex-col md:flex-row gap-3">
+            <button onclick="startEditedQuest()" class="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 font-bold py-3 rounded-xl text-sm"><i class="fa-solid fa-play"></i> Start Quest</button>
+            <button onclick="cancelEditor()" class="bg-slate-800 hover:bg-slate-700 font-semibold py-3 px-6 rounded-xl text-sm border border-slate-700 text-slate-300">Back</button>
+        </div>
+    </div>
+
+</main>
+
+<!-- LEVEL-UP UPGRADE MODAL -->
+<div id="upgradeModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/80 p-4">
+    <div class="glass-card max-w-2xl w-full p-6 rounded-3xl border border-amber-400/40 space-y-4">
+        <div class="text-center">
+            <div class="text-amber-400 font-extrabold text-2xl tracking-wide">LEVEL UP!</div>
+            <div class="text-slate-400 text-sm" id="upgradeSub"></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3" id="upgradeChoices"></div>
+    </div>
+</div>
+
+<!-- PHASE 2 BANNER -->
+<div id="phase2Banner" class="hidden fixed inset-0 items-center justify-center p-4" style="z-index:75;background:rgba(60,5,2,.9)">
+    <div class="text-center space-y-4">
+        <div style="font-family:'Press Start 2P',monospace;font-size:.8rem;color:#f2a33a">PHASE 2</div>
+        <div class="boss-icon enraged" id="p2Icon" style="font-size:7rem"></div>
+        <div id="p2Text" style="font-family:'Press Start 2P',monospace;font-size:.95rem;color:#e0574b;text-shadow:3px 3px 0 #000"></div>
+    </div>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div id="loadingOverlay" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/80 p-4">
+    <div class="glass-card p-8 rounded-3xl text-center max-w-sm w-full space-y-4">
+        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-indigo-400"></i>
+        <div class="font-bold text-lg" id="loadingText">Forging your quest...</div>
+        <div class="text-xs text-slate-400">Longer quests can take up to a minute.</div>
+    </div>
+</div>
+
+<!-- WRONG-ANSWER FEEDBACK MODAL -->
+<div id="feedbackModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/70 p-4">
+    <div class="glass-card max-w-md w-full p-6 rounded-3xl border border-red-500/40 space-y-4">
+        <div class="flex items-center gap-2 text-red-400 font-extrabold text-lg"><i class="fa-solid fa-circle-xmark"></i> Incorrect</div>
+        <div class="text-sm text-slate-300" id="fbQuestion"></div>
+        <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-3">
+            <div class="text-[11px] uppercase font-bold text-emerald-400 tracking-wider">Correct answer</div>
+            <div class="text-sm font-semibold text-slate-100 mt-1" id="fbAnswer"></div>
+        </div>
+        <div id="fbNote" class="hidden text-xs text-amber-400 font-semibold"></div>
+        <button id="fbContinue" class="w-full bg-indigo-600 hover:bg-indigo-500 font-bold py-3 rounded-xl text-sm">Continue</button>
+    </div>
+</div>
+
+<!-- JAVASCRIPT LOGIC -->
+<script>
+    // =========================================================================
+    // 1. CONFIGURATION & STATE
+    // =========================================================================
+    let GEMINI_API_KEY = ""; // PASTE YOUR GEMINI API KEY HERE IF HARDCODING
+
+    // Change this if Google's model list (ai.google.dev/gemini-api/docs/models) says otherwise
+    // Tried in order; if one is out of quota (429) or unavailable (404/503), the next is used.
+    const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+    let generating = false;
+
+    let gameState = {
+        lives: 3,
+        maxLives: 5,
+        xp: 0,
+        currentChapter: 0,
+        currentRoom: 0,
+        chapters: [],
+        missedQuestions: [],
+        sfxEnabled: true,
+        level: 1,
+        pendingUpgrades: 0,
+        perks: { shield: 0, hint: 0, revive: 0, scholar: 0, crit: 0 }
+    };
+    let bossBusy = false;
+    let feedbackNote = '';
+    const XP_PER_CORRECT = 50;
+    const xpNeeded = lvl => 100 + (lvl - 1) * 50; // level 1->2 needs 100, then 150, 200, ...
+
+    // Web Audio Synthesizer SFX
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSFX(type) {
+        if (!gameState.sfxEnabled) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (type === 'smash') { playSmash(); return; }
+        if (type === 'roar') { playRoar(); return; }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'correct') {
+            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        } else if (type === 'wrong') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(110, audioCtx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+        }
+    }
+
+    function playRoar() {
+        const t = audioCtx.currentTime;
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain(), f = audioCtx.createBiquadFilter();
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(45, t + 1);
+        f.type = 'lowpass'; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(150, t + 1);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.7, t + 0.1); g.gain.exponentialRampToValueAtTime(0.01, t + 1);
+        const lfo = audioCtx.createOscillator(), lg = audioCtx.createGain();
+        lfo.frequency.value = 22; lg.gain.value = 18; lfo.connect(lg); lg.connect(o.frequency);
+        o.connect(f); f.connect(g); g.connect(audioCtx.destination);
+        o.start(t); lfo.start(t); o.stop(t + 1); lfo.stop(t + 1);
+    }
+
+    function playSmash() {
+        const t = audioCtx.currentTime;
+        const len = Math.floor(audioCtx.sampleRate * 0.3);
+        const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+        const noise = audioCtx.createBufferSource(); noise.buffer = buf;
+        const ng = audioCtx.createGain(); ng.gain.value = 0.6;
+        const f = audioCtx.createBiquadFilter(); f.type = 'lowpass';
+        f.frequency.setValueAtTime(3000, t); f.frequency.exponentialRampToValueAtTime(300, t + 0.3);
+        noise.connect(f); f.connect(ng); ng.connect(audioCtx.destination); noise.start(t);
+        const o = audioCtx.createOscillator(), og = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.25);
+        og.gain.setValueAtTime(0.8, t); og.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+        o.connect(og); og.connect(audioCtx.destination); o.start(t); o.stop(t + 0.3);
+    }
+    document.getElementById('sfxToggle').addEventListener('click', e => {
+        gameState.sfxEnabled = !gameState.sfxEnabled;
+        e.currentTarget.innerHTML = gameState.sfxEnabled ? '<i class="fa-solid fa-volume-high text-indigo-400"></i> SFX On' : '<i class="fa-solid fa-volume-xmark text-slate-500"></i> SFX Off';
+    });
+
+    // Initialize API key input from local storage
+    document.addEventListener('DOMContentLoaded', () => {
+        // The key box is a developer tool: shown only with #dev or when the file is opened directly from disk
+        if (location.hash === '#dev' || location.protocol === 'file:') { // opening the file directly = developer testing
+            document.getElementById('devKeyBox').classList.remove('hidden');
+            const savedKey = localStorage.getItem('study_quest_gemini_key');
+            if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+        }
+    });
+
+    // File Parsing (PDF & Text)
+    let uploadedText = "";
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const status = document.getElementById('fileStatus');
+        status.textContent = `Processing ${file.name}...`;
+        status.classList.remove('hidden');
+
+        if (file.name.endsWith('.pdf')) {
+            const arrayBuffer = await file.arrayBuffer();
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let text = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                text += content.items.map(item => item.str).join(" ") + "\n";
+            }
+            uploadedText = text;
+        } else {
+            uploadedText = await file.text();
+        }
+        status.textContent = `Loaded ${file.name} successfully!`;
+    });
+
+    // =========================================================================
+    // 2. QUEST GENERATION
+    // =========================================================================
+    async function startCustomQuest() {
+        const topicsText = document.getElementById('studyTopics').value.trim() + "\n" + uploadedText;
+        const useAI = document.getElementById('aiToggle').checked;
+        const keyInput = document.getElementById('apiKeyInput').value.trim();
+
+        GEMINI_API_KEY = keyInput;
+        if (keyInput) localStorage.setItem('study_quest_gemini_key', keyInput);
+
+        if (!topicsText.trim() && useAI) {
+            alert("Please enter some study topics or upload a file first!");
+            return;
+        }
+
+        if (useAI) {
+            if (generating) return;
+            generating = true;
+            showLoading();
+            try {
+                await generateAIQuest(topicsText);
+            } catch (err) {
+                console.error(err);
+                hideLoading();
+                alert("AI generation failed: " + err.message + "\n\nFalling back to Demo mode.");
+                startDemoQuest();
+            }
+            hideLoading();
+            generating = false;
+        } else {
+            startDemoQuest();
+        }
+    }
+
+    async function generateAIQuest(inputText) {
+        const length = parseInt(document.getElementById('journeyLength').value);
+        const difficulty = document.getElementById('journeyDifficulty').value;
+        const prompt = `Create a ${length}-chapter educational dungeon game based on these notes: "${inputText.substring(0, 3000)}".
+        Return ONLY a valid JSON array of ${length} objects formatted like this:
+        [
+          {
+            "title": "Chapter 1 Title",
+            "story": "Intro narrative background...",
+            "rooms": [
+              {
+                "type": "mcq",
+                "question": "Multiple choice question?",
+                "options": ["Option A", "Option B", "Option C"],
+                "correct": 0
+              },
+              {
+                "type": "typed",
+                "question": "Question requiring short typed answer?",
+                "answer": "correct answer"
+              }
+            ],
+            "boss": {
+              "name": "Boss Name",
+              "hp": 3,
+              "questions": [
+                {"q": "Boss Question 1?", "options": ["A", "B", "C"], "correct": 0},
+                {"q": "Boss Question 2?", "options": ["A", "B", "C"], "correct": 1},
+                {"q": "Boss Question 3?", "options": ["A", "B", "C"], "correct": 2}
+              ]
+            }
+          }
+        ]
+
+        Also: for every room question and every boss question add "icon" (one relevant emoji) and "imageTopic" (an exact English Wikipedia article title that illustrates the concept, e.g. "Mitochondrion", or "" if none fits). Give each boss an "emoji" (one monster emoji such as 👹 👾 🐉 🧟 👻 💀 🤖 🦑). The LAST chapter's boss is the final boss: give it exactly 6 questions that are harder than the other bosses' questions (it will have a shield bar and a health bar), and give it an "enragedEmoji": a more menacing monster emoji for its second phase. Difficulty level: ${difficulty}.`;
+
+        const textResponse = await callGemini(prompt);
+        const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) throw new Error('No JSON array found in the response');
+        const chapters = JSON.parse(jsonMatch[0]);
+        validateChapters(chapters);
+        gameState.chapters = chapters;
+        hideLoading();
+        openEditor();
+    }
+
+    // Direct mode (key typed in the page, local testing) or server mode (/api/generate, key stays on the server)
+    async function callGemini(prompt) {
+        if (GEMINI_API_KEY) {
+            let lastErr;
+            for (const model of GEMINI_MODELS) {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+                    if (text) return text;
+                    lastErr = new Error(`Gemini returned no text (${model}). ` + JSON.stringify(data.promptFeedback || ''));
+                    continue;
+                }
+                lastErr = new Error(`Gemini error ${res.status} (${model}): ${data?.error?.message || 'unknown'}`);
+                if ([429, 404, 503].includes(res.status)) continue; // try the next model
+                throw lastErr;
+            }
+            throw lastErr;
+        }
+        let res;
+        try {
+            res = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+        } catch (e) {
+            throw new Error('Could not reach the quest generator. Run the site with the server (see README).');
+        }
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 404) throw new Error('No server found at /api/generate. Run the site with "netlify dev" (see README), or add #dev to the address to test with your own key.');
+        if (res.status === 429) throw new Error(data.error === 'too_many_requests' ? 'You have generated several quests recently. Please wait a few minutes and try again.' : 'All models are out of quota. Wait a bit and try again, or use fewer chapters.');
+        if (!res.ok || !data.text) throw new Error(data.error || ('Server error ' + res.status));
+        return data.text;
+    }
+
+    function validateChapters(ch) {
+        const bad = () => { throw new Error('The AI returned an unexpected format. Please try again.'); };
+        if (!Array.isArray(ch) || !ch.length) bad();
+        ch.forEach(c => {
+            if (!Array.isArray(c.rooms) || !c.rooms.length || !c.boss || !Array.isArray(c.boss.questions) || !c.boss.questions.length) bad();
+            c.rooms.forEach(r => {
+                if (!r.question) bad();
+                if (r.type === 'typed') { if (!r.answer) bad(); }
+                else { r.type = 'mcq'; if (!Array.isArray(r.options) || r.options.length < 2 || !(r.correct >= 0 && r.correct < r.options.length)) bad(); }
+            });
+            c.boss.questions.forEach(q => {
+                if (!q.q || !Array.isArray(q.options) || q.options.length < 2 || !(q.correct >= 0 && q.correct < q.options.length)) bad();
+            });
+            c.boss.hp = c.boss.questions.length;
+            if (!c.boss.emoji) c.boss.emoji = BOSS_EMOJIS[Math.floor(Math.random() * BOSS_EMOJIS.length)];
+        });
+    }
+
+    function startDemoQuest() {
+        gameState.chapters = [
+            {
+                title: "The Force Fortress",
+                story: "Gravity hums through the walls of an ancient fortress of motion.",
+                rooms: [
+                    { type: "mcq", icon: "🚀", imageTopic: "Newton (unit)", question: "What is the SI unit of force?", options: ["Newton", "Joule", "Watt"], correct: 0 },
+                    { type: "typed", icon: "🍎", imageTopic: "Gravity", question: "Roughly what is the acceleration due to gravity on Earth, in m/s²? (one number)", answer: "9.8" }
+                ],
+                boss: {
+                    name: "Gravity Golem", emoji: "🗿",
+                    hp: 3,
+                    questions: [
+                        { q: "Which formula is Newton's second law?", icon: "⚖️", imageTopic: "Newton's laws of motion", options: ["F = ma", "E = mc²", "V = IR"], correct: 0 },
+                        { q: "An object stays at rest unless a force acts on it. Which law is this?", icon: "🧱", imageTopic: "Newton's laws of motion", options: ["Third law", "First law (inertia)", "Law of gravitation"], correct: 1 },
+                        { q: "Every action has an equal and opposite reaction. Which law is this?", icon: "🔄", imageTopic: "Isaac Newton", options: ["Third law", "Second law", "First law"], correct: 0 }
+                    ]
+                }
+            },
+            {
+                title: "The Energy Engine",
+                story: "Sparks race along cables in a humming machine of power.",
+                rooms: [
+                    { type: "mcq", icon: "🏃", imageTopic: "Kinetic energy", question: "What kind of energy does a moving object have?", options: ["Potential energy", "Kinetic energy", "Thermal energy"], correct: 1 },
+                    { type: "typed", icon: "⚡", imageTopic: "Joule", question: "What is the SI unit of energy?", answer: "joule" }
+                ],
+                boss: {
+                    name: "Entropy Dragon", emoji: "🐉", enragedEmoji: "🐲",
+                    hp: 6,
+                    questions: [
+                        { q: "Energy cannot be created or destroyed, only changed in form. This is conservation of what?", icon: "♻️", imageTopic: "Conservation of energy", options: ["Momentum", "Energy", "Charge"], correct: 1 },
+                        { q: "About how fast does light travel in a vacuum?", icon: "💡", imageTopic: "Speed of light", options: ["300,000 km/s", "300 km/s", "30,000 km/s"], correct: 0 },
+                        { q: "Power is energy transferred per unit of what?", icon: "⏱️", imageTopic: "Power (physics)", options: ["Distance", "Mass", "Time"], correct: 2 },
+                        { q: "What is the SI unit of power?", icon: "💡", imageTopic: "Watt", options: ["Watt", "Volt", "Newton"], correct: 0 },
+                        { q: "If you double an object's speed, its kinetic energy becomes...", icon: "🏎️", imageTopic: "Kinetic energy", options: ["2 times", "4 times", "8 times"], correct: 1 },
+                        { q: "Which force pulls objects toward the center of the Earth?", icon: "🌍", imageTopic: "Gravity", options: ["Friction", "Gravity", "Magnetism"], correct: 1 }
+                    ]
+                }
+            }
+        ];
+        launchGame();
+    }
+
+    // =========================================================================
+    // 3. GAMEPLAY ENGINE & UI
+    // =========================================================================
+    // ----- Own questions: import, template, create from scratch -----
+    const shuffleArr = a => [...a].sort(() => Math.random() - 0.5);
+    function parseCSV(text) {
+        const rows = []; let row = [], cur = '', q = false;
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+            else if (c === '"') q = true;
+            else if (c === ',') { row.push(cur); cur = ''; }
+            else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; if (row.some(x => x.trim())) rows.push(row); row = []; }
+            else cur += c;
+        }
+        row.push(cur); if (row.some(x => x.trim())) rows.push(row);
+        return rows;
+    }
+    function csvToChapters(text) {
+        const rows = parseCSV(text.replace(/^\uFEFF/, ''));
+        if (rows.length < 2) throw new Error('The file needs a header row and at least one question.');
+        const h = rows[0].map(x => x.trim().toLowerCase());
+        ['chapter', 'question', 'answer'].forEach(n => { if (h.indexOf(n) < 0) throw new Error(`Missing column "${n}". Download the CSV template to see the format.`); });
+        const get = (r, n) => h.indexOf(n) < 0 ? '' : (r[h.indexOf(n)] || '').trim();
+        const map = new Map();
+        rows.slice(1).forEach((r, idx) => {
+            const q = get(r, 'question'), a = get(r, 'answer');
+            if (!q && !a) return;
+            if (!q || !a) throw new Error(`Row ${idx + 2}: question and answer are both required.`);
+            const name = get(r, 'chapter') || 'Chapter 1';
+            if (!map.has(name)) map.set(name, { title: name, story: '', rooms: [], boss: { name: 'Boss of ' + name, emoji: '', hp: 1, questions: [] } });
+            const c = map.get(name);
+            const wrongs = ['wrong1', 'wrong2', 'wrong3'].map(n => get(r, n)).filter(Boolean);
+            const sec = get(r, 'section').toLowerCase(), icon = get(r, 'icon') || '❓', imageTopic = get(r, 'imagetopic');
+            const opts = shuffleArr([a, ...wrongs]);
+            if (sec === 'boss') {
+                if (wrongs.length < 1) throw new Error(`Row ${idx + 2}: boss questions need at least one wrong answer.`);
+                c.boss.questions.push({ q, options: opts, correct: opts.indexOf(a), icon, imageTopic });
+            } else if (wrongs.length >= 1) c.rooms.push({ type: 'mcq', question: q, options: opts, correct: opts.indexOf(a), icon, imageTopic });
+            else c.rooms.push({ type: 'typed', question: q, answer: a, icon, imageTopic });
+        });
+        const list = [...map.values()];
+        list.forEach(c => {
+            if (!c.boss.questions.length) {
+                for (let i = c.rooms.length - 1; i >= 0 && c.boss.questions.length < 2 && c.rooms.length > 1; i--) {
+                    const r = c.rooms[i];
+                    if (r.type === 'mcq') { c.boss.questions.unshift({ q: r.question, options: r.options, correct: r.correct, icon: r.icon, imageTopic: r.imageTopic }); c.rooms.splice(i, 1); }
+                }
+            }
+            if (!c.rooms.length && c.boss.questions.length > 1) {
+                const q = c.boss.questions.shift();
+                c.rooms.push({ type: 'mcq', question: q.q, options: q.options, correct: q.correct, icon: q.icon, imageTopic: q.imageTopic });
+            }
+            if (!c.rooms.length || !c.boss.questions.length) throw new Error(`Chapter "${c.title}" needs at least 2 multiple-choice questions (one for a room, one for the boss).`);
+        });
+        return list;
+    }
+    document.getElementById('importInput').addEventListener('change', async e => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+            if (file.size > 5e6) throw new Error('File too large (5 MB max).');
+            const text = await file.text();
+            let chapters;
+            if (/\.json$/i.test(file.name)) { const p = JSON.parse(text); chapters = Array.isArray(p) ? p : p.chapters; }
+            else chapters = csvToChapters(text);
+            validateChapters(chapters);
+            gameState.chapters = chapters;
+            openEditor();
+        } catch (err) { alert('Could not import that file: ' + err.message); }
+    });
+    function downloadTemplate() {
+        const csv = [
+            'chapter,section,question,answer,wrong1,wrong2,wrong3,icon,imagetopic',
+            'Motion,room,What is the SI unit of force?,Newton,Joule,Watt,Pascal,🚀,Newton (unit)',
+            'Motion,room,Roughly what is g on Earth in m/s²?,9.8,,,,🍎,Gravity',
+            'Motion,boss,Which formula is Newton\'s second law?,F = ma,E = mc²,V = IR,,⚖️,Newton\'s laws of motion',
+            'Motion,boss,Which law is inertia?,First law,Second law,Third law,,🧱,Inertia'
+        ].join('\n');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        a.download = 'study-quest-template.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+    const newRoomMCQ = () => ({ type: 'mcq', question: '', options: ['', '', ''], correct: 0, icon: '❓', imageTopic: '' });
+    const newRoomTyped = () => ({ type: 'typed', question: '', answer: '', icon: '✍️', imageTopic: '' });
+    const newBossQ = () => ({ q: '', options: ['', '', ''], correct: 0, icon: '⚔️', imageTopic: '' });
+    const newChapter = n => ({ title: 'Chapter ' + n, story: '', rooms: [newRoomMCQ()], boss: { name: 'The Final Boss', emoji: '👹', hp: 1, questions: [newBossQ()] } });
+    function createBlankQuest() {
+        gameState.chapters = [newChapter(1)];
+        openEditor();
+    }
+
+    // ----- Loading overlay -----
+    const LOADING_MSGS = ["Forging your quest...", "Summoning bosses...", "Sharpening the traps...", "Hiding the right doors...", "Almost there..."];
+    let loadingTimer = null;
+    function showLoading() {
+        const o = document.getElementById('loadingOverlay');
+        o.classList.remove('hidden'); o.classList.add('flex');
+        let i = 0;
+        document.getElementById('loadingText').textContent = LOADING_MSGS[0];
+        clearInterval(loadingTimer);
+        loadingTimer = setInterval(() => { i = (i + 1) % LOADING_MSGS.length; document.getElementById('loadingText').textContent = LOADING_MSGS[i]; }, 2500);
+    }
+    function hideLoading() {
+        clearInterval(loadingTimer);
+        const o = document.getElementById('loadingOverlay');
+        o.classList.add('hidden'); o.classList.remove('flex');
+    }
+
+    // ----- Review & edit screen -----
+    const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const INP = 'w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500';
+    function openEditor() {
+        document.getElementById('setupScreen').classList.add('hidden');
+        document.getElementById('editScreen').classList.remove('hidden');
+        renderEditor();
+    }
+    function cancelEditor() {
+        document.getElementById('editScreen').classList.add('hidden');
+        document.getElementById('setupScreen').classList.remove('hidden');
+    }
+    function qEditor(ci, k, i, q) {
+        const at = `data-c="${ci}" data-k="${k}" data-i="${i}"`;
+        const qf = k === 'rooms' ? 'question' : 'q';
+        const body = q.options
+            ? q.options.map((o, j) => `<label class="flex items-center gap-2"><input type="radio" name="r-${ci}-${k}-${i}" ${at} data-f="correct" value="${j}" ${q.correct === j ? 'checked' : ''}><input ${at} data-f="opt" data-j="${j}" value="${esc(o)}" class="${INP}"></label>`).join('')
+            : `<input ${at} data-f="answer" value="${esc(q.answer)}" placeholder="Correct answer" class="${INP}">`;
+        return `<div class="rounded-xl border border-slate-800 p-3 space-y-2">
+            <div class="flex gap-2"><input ${at} data-f="${qf}" value="${esc(q[qf])}" class="${INP}"><button data-del ${at} class="px-3 text-xs bg-slate-800 hover:bg-red-500/30 rounded-lg border border-slate-700">&#10005;</button></div>
+            <div class="flex gap-2"><input ${at} data-f="icon" value="${esc(q.icon)}" placeholder="Icon" maxlength="4" style="max-width:5rem" class="${INP}"><input ${at} data-f="imageTopic" value="${esc(q.imageTopic)}" placeholder="Image: Wikipedia article title (optional)" class="${INP}"></div>${body}</div>`;
+    }
+    function renderEditor() {
+        document.getElementById('editList').innerHTML = gameState.chapters.map((c, ci) => `
+            <div class="glass-card p-4 rounded-2xl space-y-3">
+                <input data-c="${ci}" data-f="title" value="${esc(c.title)}" class="${INP} font-bold">
+                <div class="text-[11px] uppercase tracking-wider text-indigo-400 font-bold">Rooms</div>
+                ${c.rooms.map((r, i) => qEditor(ci, 'rooms', i, r)).join('')}
+                <div class="text-[11px] uppercase tracking-wider text-red-400 font-bold">Boss name${ci === gameState.chapters.length - 1 ? ' (FINAL BOSS: shield + health bars, add 6+ questions)' : ''}</div>
+                <div class="flex gap-2"><input data-c="${ci}" data-k="boss" data-f="emoji" value="${esc(c.boss.emoji)}" maxlength="4" style="max-width:5rem" class="${INP}"><input data-c="${ci}" data-k="boss" data-f="name" value="${esc(c.boss.name)}" class="${INP}">${ci === gameState.chapters.length - 1 ? `<input data-c="${ci}" data-k="boss" data-f="enragedEmoji" value="${esc(c.boss.enragedEmoji)}" maxlength="4" placeholder="P2" title="Phase 2 emoji" style="max-width:5rem" class="${INP}">` : ''}</div>
+                ${c.boss.questions.map((q, i) => qEditor(ci, 'bq', i, q)).join('')}
+                <div class="flex flex-wrap gap-2">
+                    <button data-add="room-mcq" data-c="${ci}" class="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700">+ Door question</button>
+                    <button data-add="room-typed" data-c="${ci}" class="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700">+ Typed question</button>
+                    <button data-add="boss" data-c="${ci}" class="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700">+ Boss question</button>
+                    <button data-add="del-chapter" data-c="${ci}" class="px-3 py-2 text-xs bg-slate-800 hover:bg-red-500/30 rounded-lg border border-slate-700 ml-auto">Delete chapter</button>
+                </div>
+            </div>`).join('') + `<button data-add="chapter" class="w-full px-3 py-2.5 text-sm bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700">+ Add chapter</button>`;
+    }
+    function editTarget(el) {
+        const ch = gameState.chapters[+el.dataset.c], k = el.dataset.k, i = +el.dataset.i;
+        return k === 'rooms' ? ch.rooms[i] : k === 'bq' ? ch.boss.questions[i] : k === 'boss' ? ch.boss : ch;
+    }
+    document.getElementById('editList').addEventListener('input', e => {
+        const el = e.target, f = el.dataset.f;
+        if (!f) return;
+        const obj = editTarget(el);
+        if (f === 'opt') obj.options[+el.dataset.j] = el.value;
+        else if (f === 'correct') obj.correct = +el.value;
+        else obj[f] = el.value;
+    });
+    document.getElementById('editList').addEventListener('click', e => {
+        const add = e.target.closest('[data-add]');
+        if (add) {
+            const kind = add.dataset.add, chs = gameState.chapters, ch = chs[+add.dataset.c];
+            if (kind === 'chapter') chs.push(newChapter(chs.length + 1));
+            else if (kind === 'room-mcq') ch.rooms.push(newRoomMCQ());
+            else if (kind === 'room-typed') ch.rooms.push(newRoomTyped());
+            else if (kind === 'boss') ch.boss.questions.push(newBossQ());
+            else if (kind === 'del-chapter') {
+                if (chs.length <= 1) { alert('You need at least one chapter.'); return; }
+                chs.splice(+add.dataset.c, 1);
+            }
+            renderEditor();
+            return;
+        }
+        const btn = e.target.closest('[data-del]');
+        if (!btn) return;
+        const ch = gameState.chapters[+btn.dataset.c], i = +btn.dataset.i;
+        const arr = btn.dataset.k === 'rooms' ? ch.rooms : ch.boss.questions;
+        if (arr.length <= 1) { alert('Each chapter needs at least one question in this section.'); return; }
+        arr.splice(i, 1);
+        renderEditor();
+    });
+    function startEditedQuest() {
+        const blank = gameState.chapters.some(c => !c.title.trim() || c.rooms.some(r => !(r.question || '').trim() || (r.options ? r.options.some(o => !o.trim()) : !(r.answer || '').trim())) || c.boss.questions.some(q => !(q.q || '').trim() || q.options.some(o => !o.trim())));
+        if (blank) { alert('Please fill in every title, question, and answer (or remove the empty question).'); return; }
+        gameState.chapters.forEach(c => { c.boss.hp = c.boss.questions.length; delete c.boss.queue; });
+        launchGame();
+    }
+
+    // ----- XP, levels, upgrades -----
+    const UPGRADES = [
+        { id: 'heart', icon: '❤️', name: 'Extra Heart', desc: '+1 max heart and heal 1 heart.', apply: () => { gameState.maxLives++; gameState.lives = Math.min(gameState.maxLives, gameState.lives + 1); } },
+        { id: 'wind', icon: '🩹', name: 'Second Wind', desc: 'Heal 2 hearts right now.', apply: () => { gameState.lives = Math.min(gameState.maxLives, gameState.lives + 2); } },
+        { id: 'shield', icon: '🛡️', name: 'Shield', desc: 'Blocks the next wrong answer. No heart lost.', apply: () => { gameState.perks.shield++; } },
+        { id: 'hint', icon: '💡', name: 'Oracle’s Eye', desc: '+2 hints: remove one wrong answer from a multiple-choice question.', apply: () => { gameState.perks.hint += 2; } },
+        { id: 'scholar', icon: '📘', name: 'Scholar', desc: '+25% XP from every correct answer.', apply: () => { gameState.perks.scholar++; } },
+        { id: 'crit', icon: '💥', name: 'Critical Strike', desc: '+25% chance for a boss hit to deal double damage.', apply: () => { gameState.perks.crit++; } },
+        { id: 'phoenix', icon: '🔥', name: 'Phoenix Feather', desc: 'Once: revive with 1 heart instead of dying.', apply: () => { gameState.perks.revive++; } }
+    ];
+    function addXP() {
+        gameState.xp += Math.round(XP_PER_CORRECT * (1 + 0.25 * gameState.perks.scholar));
+        while (gameState.xp >= xpNeeded(gameState.level)) {
+            gameState.xp -= xpNeeded(gameState.level);
+            gameState.level++;
+            gameState.pendingUpgrades++;
+        }
+        renderHUD();
+    }
+    function afterCorrect(cont) {
+        if (gameState.pendingUpgrades > 0) showUpgradePopup(cont); else cont();
+    }
+    function showUpgradePopup(cont) {
+        gameState.pendingUpgrades--;
+        let pool = UPGRADES.filter(u => !(u.id === 'wind' && gameState.lives >= gameState.maxLives));
+        pool = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
+        const modal = document.getElementById('upgradeModal');
+        document.getElementById('upgradeSub').textContent = `You reached level ${gameState.level - gameState.pendingUpgrades}. Choose an upgrade:`;
+        const box = document.getElementById('upgradeChoices');
+        box.innerHTML = '';
+        pool.forEach(u => {
+            const b = document.createElement('button');
+            b.className = 'upgrade-card glass-card p-4 text-left space-y-2';
+            b.innerHTML = `<div class="text-3xl">${u.icon}</div><div class="font-bold text-sm">${u.name}</div><div class="text-xs text-slate-400">${u.desc}</div>`;
+            b.onclick = () => {
+                u.apply();
+                renderHUD();
+                modal.classList.add('hidden'); modal.classList.remove('flex');
+                if (gameState.pendingUpgrades > 0) showUpgradePopup(cont); else cont();
+            };
+            box.appendChild(b);
+        });
+        modal.classList.remove('hidden'); modal.classList.add('flex');
+    }
+    function consumeShield() {
+        if (gameState.perks.shield > 0) { gameState.perks.shield--; return true; }
+        return false;
+    }
+    function hintButton() {
+        const n = gameState.perks.hint;
+        return n > 0 ? `<button id="hintBtn" onclick="useHint()" class="px-3 py-1.5 mb-2 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-semibold">💡 Hint (${n} left)</button>` : '';
+    }
+    function useHint() {
+        if (gameState.perks.hint <= 0) return;
+        const ch = gameState.chapters[gameState.currentChapter];
+        const correct = gameState.currentRoom < ch.rooms.length ? ch.rooms[gameState.currentRoom].correct : getBossQueue(ch.boss)[0].correct;
+        const opts = [...document.querySelectorAll('[data-idx]')].filter(b => +b.dataset.idx !== correct && !b.disabled);
+        if (opts.length <= 1) return;
+        const b = opts[Math.floor(Math.random() * opts.length)];
+        b.disabled = true; b.classList.add('opacity-30', 'line-through');
+        gameState.perks.hint--;
+        const hb = document.getElementById('hintBtn');
+        if (gameState.perks.hint > 0) hb.textContent = `💡 Hint (${gameState.perks.hint} left)`; else hb.remove();
+        renderHUD();
+    }
+    function bossHitEffect(boss, crit, broke) {
+        playSFX('smash');
+        document.querySelectorAll('.boss-answer').forEach(b => b.disabled = true);
+        const icon = document.getElementById('bossIcon');
+        if (icon) {
+            icon.classList.remove('boss-hit'); void icon.offsetWidth; icon.classList.add('boss-hit');
+            const fx = document.createElement('span');
+            fx.className = 'impact'; fx.textContent = broke ? '🛡️💥' : crit ? '💥💥' : '💥';
+            icon.appendChild(fx);
+        }
+        const bar = document.getElementById('bossHpBar');
+        if (bar) bar.style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
+        const sbar = document.getElementById('bossShieldBar');
+        if (sbar && boss.maxShield) sbar.style.width = Math.max(0, (boss.shield / boss.maxShield) * 100) + '%';
+        const m = document.querySelector('main');
+        m.classList.remove('screen-shake'); void m.offsetWidth; m.classList.add('screen-shake');
+        setTimeout(() => m.classList.remove('screen-shake'), 500);
+    }
+
+    // ----- Question visuals (emoji + optional Wikipedia image) -----
+    const BOSS_EMOJIS = ['👹', '👾', '🐉', '🧟', '👻', '💀', '🤖', '🦑'];
+    const imgCache = new Map();
+    let visualToken = 0;
+    async function wikiThumb(topic) {
+        if (!topic) return null;
+        if (imgCache.has(topic)) return imgCache.get(topic);
+        let url = null;
+        try {
+            const r = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(topic.trim().replace(/ /g, '_')));
+            if (r.ok) { const d = await r.json(); url = d.thumbnail?.source || null; }
+        } catch (e) { /* offline or blocked: keep the emoji */ }
+        imgCache.set(topic, url);
+        return url;
+    }
+    function visualHTML(q) {
+        return `<div id="qVisual" class="mx-auto w-full max-w-xs h-36 rounded-2xl bg-slate-900/70 border border-slate-800 flex items-center justify-center overflow-hidden text-6xl">${esc(q.icon || '❓')}</div>`;
+    }
+    async function loadVisual(q) {
+        const my = ++visualToken;
+        const url = await wikiThumb(q.imageTopic);
+        const el = document.getElementById('qVisual');
+        if (!url || my !== visualToken || !el) return;
+        const img = new Image();
+        img.alt = q.imageTopic;
+        img.className = 'h-full w-full object-cover';
+        img.onload = () => { if (my === visualToken && document.getElementById('qVisual') === el) { el.textContent = ''; el.appendChild(img); } };
+        img.src = url;
+    }
+
+    let questSnapshot = null;
+    function restartQuest() {
+        if (!confirm('Restart this quest from the beginning? Your progress will be lost.')) return;
+        launchGame(true);
+    }
+    function replayQuest() { launchGame(true); }
+
+    function launchGame(replay = false) {
+        if (replay && questSnapshot) gameState.chapters = JSON.parse(questSnapshot);
+        else questSnapshot = JSON.stringify(gameState.chapters);
+        gameState.chapters.forEach((c, i) => { c.boss.isFinal = i === gameState.chapters.length - 1; });
+        document.getElementById('reviewScreen').classList.add('hidden');
+        document.getElementById('editScreen').classList.add('hidden');
+        document.getElementById('setupScreen').classList.add('hidden');
+        document.getElementById('gameplayScreen').classList.remove('hidden');
+        gameState.lives = 3;
+        gameState.xp = 0;
+        gameState.level = 1;
+        gameState.maxLives = 5;
+        gameState.pendingUpgrades = 0;
+        gameState.perks = { shield: 0, hint: 0, revive: 0, scholar: 0, crit: 0 };
+        bossBusy = false;
+        gameState.missedQuestions = [];
+        gameState.currentChapter = 0;
+        gameState.currentRoom = 0;
+        renderHUD();
+        renderRoom();
+    }
+
+    function exitToMenu() {
+        if (!confirm('Leave this quest and return to the start screen? Your progress will be lost.')) return;
+        returnToStart();
+    }
+
+    function returnToStart() {
+        const modal = document.getElementById('feedbackModal');
+        modal.classList.add('hidden'); modal.classList.remove('flex');
+        ['gameplayScreen', 'reviewScreen', 'editScreen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+        document.getElementById('setupScreen').classList.remove('hidden');
+        gameState.lives = 3;
+        gameState.xp = 0;
+        gameState.currentChapter = 0;
+        gameState.currentRoom = 0;
+        gameState.missedQuestions = [];
+        gameState.chapters = [];
+    }
+
+    function renderHUD() {
+        const container = document.getElementById('livesContainer');
+        container.innerHTML = '';
+        for (let i = 0; i < gameState.maxLives; i++) {
+            const heart = document.createElement('i');
+            heart.className = `fa-solid fa-heart ${i < gameState.lives ? 'text-red-500' : 'text-slate-800'} text-sm`;
+            container.appendChild(heart);
+        }
+        const need = xpNeeded(gameState.level);
+        document.getElementById('levelBadge').textContent = `LV ${gameState.level}`;
+        document.getElementById('xpDisplay').textContent = `${gameState.xp} / ${need} XP`;
+        document.getElementById('xpBar').style.width = Math.min(100, (gameState.xp / need) * 100) + '%';
+        const p = gameState.perks, chips = [];
+        if (p.shield) chips.push(`🛡️ Shield ×${p.shield}`);
+        if (p.hint) chips.push(`💡 Hints ×${p.hint}`);
+        if (p.revive) chips.push(`🔥 Phoenix ×${p.revive}`);
+        if (p.scholar) chips.push(`📘 Scholar +${25 * p.scholar}% XP`);
+        if (p.crit) chips.push(`💥 Crit ${Math.min(100, 25 * p.crit)}%`);
+        document.getElementById('upgradeBar').innerHTML = chips.map(c => `<span class="px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-800 text-slate-300">${c}</span>`).join('');
+        document.getElementById('chapterProgressText').textContent = `Floor ${gameState.currentChapter + 1} / ${gameState.chapters.length}`;
+    }
+
+    function renderRoom() {
+        const container = document.getElementById('roomContainer');
+        const chapter = gameState.chapters[gameState.currentChapter];
+
+        if (gameState.currentRoom < chapter.rooms.length) {
+            // REGULAR ROOM (MCQ OR TYPED)
+            const room = chapter.rooms[gameState.currentRoom];
+            if (room.type === 'mcq') {
+                container.innerHTML = `
+                    <div class="space-y-4">
+                        <span class="text-xs font-bold text-indigo-400 tracking-wider uppercase">${chapter.title} • Room ${gameState.currentRoom + 1}</span>
+                        <h3 class="text-xl font-bold">${room.question}</h3>${visualHTML(room)}
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
+                        ${room.options.map((opt, idx) => `
+                            <button data-idx="${idx}" onclick="answerMCQ(${idx})" class="door-card glass-card p-6 rounded-2xl text-left font-semibold border border-slate-800 hover:border-indigo-500 flex flex-col justify-between space-y-4">
+                                <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs">Door ${['I','II','III','IV','V'][idx] || idx + 1}</div>
+                                <span class="text-sm text-slate-200">${opt}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                    ${hintButton()}<div class="text-xs text-slate-500">Pick a door. Wrong doors trigger traps and cost 1 life.</div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="space-y-4">
+                        <span class="text-xs font-bold text-purple-400 tracking-wider uppercase">${chapter.title} • Room ${gameState.currentRoom + 1}</span>
+                        <h3 class="text-xl font-bold">${room.question}</h3>${visualHTML(room)}
+                    </div>
+                    <div class="my-6 space-y-3">
+                        <input type="text" id="typedInput" placeholder="Type your answer here..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-purple-500">
+                        <div class="flex gap-2">
+                            <button onclick="answerTyped()" class="flex-1 bg-purple-600 hover:bg-purple-500 font-bold py-3 rounded-xl text-sm">Submit Answer</button>
+                            <button onclick="overrideTyped()" class="bg-slate-800 hover:bg-slate-700 text-xs text-slate-400 px-4 rounded-xl border border-slate-700">I was right, count it</button>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-500">Capitalization and small typos are automatically forgiven.</div>
+                `;
+            }
+            loadVisual(room);
+        } else {
+            // BOSS FIGHT ROOM
+            const boss = chapter.boss;
+            const bQ = getBossQueue(boss)[0];
+
+            container.innerHTML = `
+                <div class="space-y-4 text-center">
+                    <span class="text-xs font-bold text-red-400 tracking-wider uppercase">${boss.isFinal ? (boss.phase === 2 ? '👑 FINAL BOSS: PHASE 2' : '👑 FINAL BOSS') : 'BOSS BATTLE'} • ${chapter.title}</span>
+                    <div class="boss-icon${boss.isFinal ? ' final' : ''}${boss.phase === 2 ? ' enraged' : ''}" id="bossIcon">${esc(bossEmoji(boss))}</div>
+                    <h3 class="text-2xl font-black text-red-500" id="bossTitle">${boss.name}</h3>
+                    ${bossBarsHTML(boss)}
+                </div>
+
+                <div class="my-6 glass-card p-6 rounded-2xl border border-red-500/20">
+                    ${visualHTML(bQ)}
+                    <p class="font-bold text-base mb-4 mt-3">${bQ.q}</p>
+                    <div class="space-y-2">
+                        ${bQ.options.map((opt, idx) => `
+                            <button data-idx="${idx}" onclick="answerBoss(${idx})" class="boss-answer w-full bg-slate-900/80 hover:bg-red-500/10 border border-slate-800 hover:border-red-500/50 p-3.5 rounded-xl text-left text-sm font-medium transition">
+                                ${opt}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="text-center">${hintButton()}</div>
+                <div class="text-xs text-slate-500 text-center">Defeat the boss to complete the chapter and gain +1 Life!</div>
+            `;
+            loadVisual(bQ);
+        }
+    }
+
+    // =========================================================================
+    // 4. GAME ACTIONS & HANDLERS
+    // =========================================================================
+    function answerMCQ(selectedIdx) {
+        const room = gameState.chapters[gameState.currentChapter].rooms[gameState.currentRoom];
+        if (selectedIdx === room.correct) {
+            playSFX('correct');
+            addXP();
+            afterCorrect(advanceRoom);
+        } else {
+            playSFX('wrong');
+            const blocked = consumeShield();
+            if (!blocked) gameState.lives--;
+            feedbackNote = blocked ? '🛡️ Your Shield absorbed the hit. No heart lost!' : '';
+            gameState.missedQuestions.push({ q: room.question, correct: room.options[room.correct] });
+            renderHUD();
+            showFeedback(room.question, room.options[room.correct], () => {
+                if (gameState.lives <= 0) handleGameOver(advanceRoom); else advanceRoom();
+            });
+        }
+    }
+
+    function lev(a, b) {
+        const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+        for (let j = 1; j <= b.length; j++) d[0][j] = j;
+        for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+            d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        return d[a.length][b.length];
+    }
+    function isTypedMatch(val, target) {
+        const n = x => x.toLowerCase().replace(/[.!?]+$/, '').replace(/\s+/g, ' ').trim();
+        val = n(val); target = n(target);
+        if (!val) return false;
+        if (val === target) return true;
+        if (target.length >= 3 && val.includes(target)) return true;
+        return lev(val, target) <= (target.length > 10 ? 2 : target.length > 5 ? 1 : 0);
+    }
+
+    function answerTyped() {
+        const val = document.getElementById('typedInput').value.trim().toLowerCase();
+        const room = gameState.chapters[gameState.currentChapter].rooms[gameState.currentRoom];
+        const target = room.answer.toLowerCase();
+
+        if (isTypedMatch(val, target)) {
+            playSFX('correct');
+            addXP();
+            afterCorrect(advanceRoom);
+        } else {
+            playSFX('wrong');
+            const blocked = consumeShield();
+            if (!blocked) gameState.lives--;
+            feedbackNote = blocked ? '🛡️ Your Shield absorbed the hit. No heart lost!' : '';
+            gameState.missedQuestions.push({ q: room.question, correct: room.answer });
+            renderHUD();
+            showFeedback(room.question, room.answer, () => {
+                if (gameState.lives <= 0) handleGameOver(advanceRoom); else advanceRoom();
+            });
+        }
+    }
+
+    function overrideTyped() {
+        playSFX('correct');
+        addXP();
+        afterCorrect(advanceRoom);
+    }
+
+    const ENRAGED = { '👹': '👺', '👾': '👿', '🐉': '🐲', '🧟': '💀', '👻': '😈', '💀': '☠️', '🤖': '👿', '🦑': '🐙', '🗿': '🌋', '🦠': '☣️' };
+    function bossEmoji(boss) {
+        const base = boss.emoji || '👹';
+        return boss.phase === 2 ? (boss.enragedEmoji || ENRAGED[base] || '👿') : base;
+    }
+    function showPhase2(boss, done) {
+        const b = document.getElementById('phase2Banner');
+        document.getElementById('p2Icon').textContent = bossEmoji(boss);
+        document.getElementById('p2Text').textContent = `${boss.name} IS ENRAGED!`;
+        b.classList.remove('hidden'); b.classList.add('flex');
+        playSFX('roar');
+        wrongEffect(); // red flash + shake
+        setTimeout(() => { b.classList.add('hidden'); b.classList.remove('flex'); done(); }, 1800);
+    }
+
+    function bossBarsHTML(boss) {
+        const frame = 'w-full bg-slate-900 h-5 rounded-full overflow-hidden border-2 border-slate-700 max-w-md mx-auto';
+        let html = '';
+        if (boss.maxShield > 0) {
+            html += `<div class="text-xs max-w-md mx-auto text-left mt-1" style="color:#8fc3ea">🛡️ SHIELD</div>
+                <div class="${frame}"><div id="bossShieldBar" class="h-full transition-all duration-300" style="width:${(boss.shield / boss.maxShield) * 100}%"></div></div>
+                <div class="text-xs text-red-400 max-w-md mx-auto text-left mt-1">❤️ HEALTH</div>`;
+        }
+        html += `<div class="${frame}"><div id="bossHpBar" class="bg-red-500 h-full transition-all duration-300" style="width:${(boss.hp / boss.maxHp) * 100}%"></div></div>`;
+        return html;
+    }
+
+    function getBossQueue(boss) {
+        if (!boss.queue) {
+            boss.queue = [...boss.questions];
+            boss.phase = 1;
+            const n = boss.questions.length;
+            if (boss.isFinal && n >= 2) { // final boss: shield phase first, then health phase
+                boss.maxShield = Math.ceil(n / 2);
+                boss.shield = boss.maxShield;
+                boss.hp = n - boss.maxShield;
+            } else { boss.maxShield = 0; boss.shield = 0; }
+            boss.maxHp = boss.hp || 3;
+        }
+        return boss.queue;
+    }
+
+    function answerBoss(selectedIdx) {
+        if (bossBusy) return;
+        const boss = gameState.chapters[gameState.currentChapter].boss;
+        const queue = getBossQueue(boss);
+        const bQ = queue[0];
+
+        if (selectedIdx === bQ.correct) {
+            bossBusy = true;
+            const crit = Math.random() < 0.25 * gameState.perks.crit;
+            let dmg = crit ? 2 : 1;
+            const hadShield = (boss.shield || 0) > 0;
+            if (hadShield) { const take = Math.min(boss.shield, dmg); boss.shield -= take; dmg -= take; }
+            boss.hp -= dmg;
+            const broke = hadShield && boss.shield <= 0;
+            const p2 = broke && boss.hp > 0; // shield gone, fight continues: enter phase 2
+            if (p2) boss.phase = 2;
+            queue.shift();
+            addXP();
+            bossHitEffect(boss, crit, broke);
+            setTimeout(() => {
+                bossBusy = false;
+                afterCorrect(() => {
+                    if ((boss.hp <= 0 && !(boss.shield > 0)) || queue.length === 0) {
+                        gameState.lives = Math.min(gameState.maxLives, gameState.lives + 1);
+                        gameState.currentChapter++;
+                        gameState.currentRoom = 0;
+                        if (gameState.currentChapter >= gameState.chapters.length) endGame();
+                        else { renderHUD(); renderRoom(); }
+                    } else if (p2) showPhase2(boss, renderRoom);
+                    else renderRoom();
+                });
+            }, 750);
+            return;
+        } else {
+            playSFX('wrong');
+            const blocked = consumeShield();
+            if (!blocked) gameState.lives--;
+            feedbackNote = blocked ? '🛡️ Your Shield absorbed the hit. No heart lost!' : '';
+            gameState.missedQuestions.push({ q: bQ.q, correct: bQ.options[bQ.correct] });
+            document.getElementById('bossTitle').classList.add('boss-shake');
+            document.getElementById('bossIcon').classList.add('boss-shake');
+            renderHUD();
+            showFeedback(bQ.q, bQ.options[bQ.correct], () => {
+                const go = () => { queue.push(queue.shift()); renderRoom(); }; // missed question returns later
+                if (gameState.lives <= 0) { handleGameOver(go); return; }
+                go();
+            });
+            return;
+        }
+        renderRoom();
+    }
+
+    // Red flash + screen shake on any wrong answer
+    function wrongEffect() {
+        const flash = document.getElementById('damageFlash');
+        flash.classList.remove('flash-red'); void flash.offsetWidth; flash.classList.add('flash-red');
+        [document.querySelector('main'), document.querySelector('#feedbackModal > div')].forEach(el => {
+            if (!el) return;
+            el.classList.remove('screen-shake'); void el.offsetWidth; el.classList.add('screen-shake');
+            setTimeout(() => el.classList.remove('screen-shake'), 500);
+        });
+    }
+
+    function showFeedback(question, answer, onContinue) {
+        document.getElementById('fbQuestion').textContent = question;
+        document.getElementById('fbAnswer').textContent = answer;
+        const note = document.getElementById('fbNote');
+        note.textContent = feedbackNote; note.classList.toggle('hidden', !feedbackNote); feedbackNote = '';
+        const modal = document.getElementById('feedbackModal');
+        modal.classList.remove('hidden'); modal.classList.add('flex');
+        wrongEffect();
+        const btn = document.getElementById('fbContinue');
+        btn.onclick = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); onContinue(); };
+        btn.focus();
+    }
+
+    function advanceRoom() {
+        gameState.currentRoom++;
+        renderHUD();
+        renderRoom();
+    }
+
+    function handleGameOver(cont) {
+        if (gameState.perks.revive > 0) {
+            gameState.perks.revive--;
+            gameState.lives = 1;
+            renderHUD();
+            alert("🔥 Phoenix Feather! You rise again with 1 heart.");
+            cont();
+            return;
+        }
+        alert("Your health reached zero! Your XP, level, and upgrades are lost, and the quest restarts from the beginning.");
+        launchGame(true);
+    }
+
+    function endGame() {
+        document.getElementById('gameplayScreen').classList.add('hidden');
+        document.getElementById('reviewScreen').classList.remove('hidden');
+        const list = document.getElementById('reviewList');
+        list.innerHTML = '';
+
+        if (gameState.missedQuestions.length === 0) {
+            list.innerHTML = `<div class="text-center text-emerald-400 font-bold p-4">Flawless victory! No questions missed.</div>`;
+        } else {
+            gameState.missedQuestions.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'glass-card p-4 rounded-xl border border-slate-800 text-left';
+                card.innerHTML = `
+                    <div class="text-xs text-red-400 font-bold">Missed Concept</div>
+                    <div class="text-sm font-semibold text-slate-200 mt-1">${item.q}</div>
+                    <div class="text-xs text-emerald-400 mt-2 font-medium">Correct Answer: ${item.correct}</div>
+                `;
+                list.appendChild(card);
+            });
+        }
+    }
+</script>
+</body>
+</html>
