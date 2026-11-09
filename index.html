@@ -443,7 +443,8 @@
         if (location.hash === '#dev' || location.protocol === 'file:' || ALLOW_VISITOR_KEYS) { // opening the file directly = developer testing
             document.getElementById('devKeyBox').classList.remove('hidden');
             if (ALLOW_VISITOR_KEYS) document.getElementById('keyBoxHint').innerHTML = 'Paste your own free Gemini key. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="underline text-amber-400">Get one here</a>. It stays in your browser and is only sent to Google.';
-            const savedKey = localStorage.getItem('study_quest_gemini_key');
+            let savedKey = null;
+            try { savedKey = localStorage.getItem('study_quest_gemini_key'); } catch (e) { /* storage blocked */ }
             if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
         }
     });
@@ -453,11 +454,17 @@
     document.getElementById('fileInput').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        if (file.size > 5e6) {
+            const st = document.getElementById('fileStatus');
+            st.textContent = 'File too large (5 MB max).'; st.classList.remove('hidden');
+            e.target.value = ''; uploadedText = '';
+            return;
+        }
         const status = document.getElementById('fileStatus');
         status.textContent = `Processing ${file.name}...`;
         status.classList.remove('hidden');
 
-        if (file.name.endsWith('.pdf')) {
+        if (/\.pdf$/i.test(file.name)) {
             const arrayBuffer = await file.arrayBuffer();
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -487,7 +494,7 @@
             alert('To generate a quest with AI, paste your own free Gemini API key in the key box (use the link under it to get one), or try the demo or import your own questions.');
             return;
         }
-        if (keyInput) localStorage.setItem('study_quest_gemini_key', keyInput);
+        try { if (keyInput) localStorage.setItem('study_quest_gemini_key', keyInput); } catch (e) { /* storage blocked: fine */ }
 
         if (!topicsText.trim() && useAI) {
             alert("Please enter some study topics or upload a file first!");
@@ -517,7 +524,7 @@
     async function generateAIQuest(inputText) {
         const length = parseInt(document.getElementById('journeyLength').value);
         const difficulty = document.getElementById('journeyDifficulty').value;
-        const prompt = `Create a ${length}-chapter educational dungeon game based on these notes: "${inputText.substring(0, 3000)}".
+        const prompt = `Create a ${length}-chapter educational dungeon game based on these notes: "${inputText.substring(0, 12000)}".
         Return ONLY a valid JSON array of ${length} objects formatted like this:
         [
           {
@@ -589,7 +596,7 @@
         const t0 = Date.now();
         const speed = document.getElementById('genSpeed').value;
         if (GEMINI_API_KEY) {
-            let lastErr;
+            let lastErr, authFail = false;
             const models = speed === 'quality' ? MODELS_QUALITY : MODELS_FAST;
             const levels = speed === 'quality' ? ['low', null] : ['minimal', 'low', null];
             for (const model of models) {
@@ -612,9 +619,13 @@
                     continue;
                 }
                 lastErr = new Error(`Gemini error ${res.status} (${model}): ${data?.error?.message || 'unknown'}`);
-                if ([429, 404, 503].includes(res.status)) continue; // try the next model
+                if ([401, 403, 404, 429, 503].includes(res.status)) { // try the next model (some models reject newer AQ. keys with 401)
+                    if (res.status === 401 || res.status === 403) authFail = true;
+                    continue;
+                }
                 throw lastErr;
             }
+            if (authFail && lastErr) lastErr = new Error(lastErr.message + ' | Google rejected the key on every model tried. Check that you copied the whole key, then try again with "Best quality" speed.');
             throw lastErr;
         }
         let res;
@@ -1089,14 +1100,14 @@
             if (room.type === 'mcq') {
                 container.innerHTML = `
                     <div class="space-y-4">
-                        <span class="text-xs font-bold text-indigo-400 tracking-wider uppercase">${chapter.title} • Room ${gameState.currentRoom + 1}</span>
-                        <h3 class="text-xl font-bold">${room.question}</h3>${visualHTML(room)}
+                        <span class="text-xs font-bold text-indigo-400 tracking-wider uppercase">${esc(chapter.title)} • Room ${gameState.currentRoom + 1}</span>
+                        <h3 class="text-xl font-bold">${esc(room.question)}</h3>${visualHTML(room)}
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
                         ${room.options.map((opt, idx) => `
                             <button data-idx="${idx}" onclick="answerMCQ(${idx})" class="door-card glass-card p-6 rounded-2xl text-left font-semibold border border-slate-800 hover:border-indigo-500 flex flex-col justify-between space-y-4">
                                 <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs">Door ${['I','II','III','IV','V'][idx] || idx + 1}</div>
-                                <span class="text-sm text-slate-200">${opt}</span>
+                                <span class="text-sm text-slate-200">${esc(opt)}</span>
                             </button>
                         `).join('')}
                     </div>
@@ -1105,8 +1116,8 @@
             } else {
                 container.innerHTML = `
                     <div class="space-y-4">
-                        <span class="text-xs font-bold text-purple-400 tracking-wider uppercase">${chapter.title} • Room ${gameState.currentRoom + 1}</span>
-                        <h3 class="text-xl font-bold">${room.question}</h3>${visualHTML(room)}
+                        <span class="text-xs font-bold text-purple-400 tracking-wider uppercase">${esc(chapter.title)} • Room ${gameState.currentRoom + 1}</span>
+                        <h3 class="text-xl font-bold">${esc(room.question)}</h3>${visualHTML(room)}
                     </div>
                     <div class="my-6 space-y-3">
                         <input type="text" id="typedInput" placeholder="Type your answer here..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-purple-500">
@@ -1126,19 +1137,19 @@
 
             container.innerHTML = `
                 <div class="space-y-4 text-center">
-                    <span class="text-xs font-bold text-red-400 tracking-wider uppercase">${boss.isFinal ? (boss.phase === 2 ? '👑 FINAL BOSS: PHASE 2' : '👑 FINAL BOSS') : 'BOSS BATTLE'} • ${chapter.title}</span>
+                    <span class="text-xs font-bold text-red-400 tracking-wider uppercase">${boss.isFinal ? (boss.phase === 2 ? '👑 FINAL BOSS: PHASE 2' : '👑 FINAL BOSS') : 'BOSS BATTLE'} • ${esc(chapter.title)}</span>
                     <div class="boss-icon${boss.isFinal ? ' final' : ''}${boss.phase === 2 ? ' enraged' : ''}" id="bossIcon">${esc(bossEmoji(boss))}</div>
-                    <h3 class="text-2xl font-black text-red-500" id="bossTitle">${boss.name}</h3>
+                    <h3 class="text-2xl font-black text-red-500" id="bossTitle">${esc(boss.name)}</h3>
                     ${bossBarsHTML(boss)}
                 </div>
 
                 <div class="my-6 glass-card p-6 rounded-2xl border border-red-500/20">
                     ${visualHTML(bQ)}
-                    <p class="font-bold text-base mb-4 mt-3">${bQ.q}</p>
+                    <p class="font-bold text-base mb-4 mt-3">${esc(bQ.q)}</p>
                     <div class="space-y-2">
                         ${bQ.options.map((opt, idx) => `
                             <button data-idx="${idx}" onclick="answerBoss(${idx})" class="boss-answer w-full bg-slate-900/80 hover:bg-red-500/10 border border-slate-800 hover:border-red-500/50 p-3.5 rounded-xl text-left text-sm font-medium transition">
-                                ${opt}
+                                ${esc(opt)}
                             </button>
                         `).join('')}
                     </div>
@@ -1184,6 +1195,7 @@
         val = n(val); target = n(target);
         if (!val) return false;
         if (val === target) return true;
+        if (/^[\d.,\-\/]+$/.test(target)) return false; // numbers: exact only
         if (target.length >= 3 && val.includes(target)) return true;
         return lev(val, target) <= (target.length > 10 ? 2 : target.length > 5 ? 1 : 0);
     }
@@ -1367,8 +1379,8 @@
                 card.className = 'glass-card p-4 rounded-xl border border-slate-800 text-left';
                 card.innerHTML = `
                     <div class="text-xs text-red-400 font-bold">Missed Concept</div>
-                    <div class="text-sm font-semibold text-slate-200 mt-1">${item.q}</div>
-                    <div class="text-xs text-emerald-400 mt-2 font-medium">Correct Answer: ${item.correct}</div>
+                    <div class="text-sm font-semibold text-slate-200 mt-1">${esc(item.q)}</div>
+                    <div class="text-xs text-emerald-400 mt-2 font-medium">Correct Answer: ${esc(item.correct)}</div>
                 `;
                 list.appendChild(card);
             });
