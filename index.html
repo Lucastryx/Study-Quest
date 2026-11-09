@@ -182,7 +182,7 @@
                 </div>
             </div>
 
-            <!-- API KEY FIELD (INSERT YOUR KEY HERE OR ON SCREEN) -->
+            <!-- API KEY FIELD (ALWAYS VISIBLE) -->
             <div id="devKeyBox" class="glass-card p-4 rounded-xl space-y-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-3">
@@ -191,7 +191,7 @@
                         </div>
                         <div>
                             <div class="font-medium text-sm">Gemini API Key</div>
-                            <div class="text-[11px] text-slate-400">Developer mode: for local testing only. Visitors never see this.</div>
+                            <div class="text-[11px] text-slate-400">Enter your Gemini API key to generate custom quests using AI.</div>
                         </div>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -332,11 +332,10 @@
     // =========================================================================
     // 1. CONFIGURATION & STATE
     // =========================================================================
-    let GEMINI_API_KEY = ""; // PASTE YOUR GEMINI API KEY HERE IF HARDCODING
+    let GEMINI_API_KEY = ""; // Optional hardcoded key
 
-    // Change this if Google's model list (ai.google.dev/gemini-api/docs/models) says otherwise
-    // Tried in order; if one is out of quota (429) or unavailable (404/503), the next is used.
-    const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+    // Prioritizing Gemini 3.8 Flash as requested, followed by stable fallbacks
+    const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
     let generating = false;
 
     let gameState = {
@@ -355,7 +354,7 @@
     let bossBusy = false;
     let feedbackNote = '';
     const XP_PER_CORRECT = 50;
-    const xpNeeded = lvl => 100 + (lvl - 1) * 50; // level 1->2 needs 100, then 150, 200, ...
+    const xpNeeded = lvl => 100 + (lvl - 1) * 50;
 
     // Web Audio Synthesizer SFX
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -420,12 +419,8 @@
 
     // Initialize API key input from local storage
     document.addEventListener('DOMContentLoaded', () => {
-        // The key box is a developer tool: shown only with #dev or when the file is opened directly from disk
-        if (location.hash === '#dev' || location.protocol === 'file:') { // opening the file directly = developer testing
-            document.getElementById('devKeyBox').classList.remove('hidden');
-            const savedKey = localStorage.getItem('study_quest_gemini_key');
-            if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
-        }
+        const savedKey = localStorage.getItem('study_quest_gemini_key');
+        if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
     });
 
     // File Parsing (PDF & Text)
@@ -445,7 +440,8 @@
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const content = await page.getTextContent();
-                text += content.items.map(item => item.str).join(" ") + "\n";
+                text += content.items.map(item => item.str).join(" ") + "
+";
             }
             uploadedText = text;
         } else {
@@ -458,11 +454,12 @@
     // 2. QUEST GENERATION
     // =========================================================================
     async function startCustomQuest() {
-        const topicsText = document.getElementById('studyTopics').value.trim() + "\n" + uploadedText;
+        const topicsText = document.getElementById('studyTopics').value.trim() + "
+" + uploadedText;
         const useAI = document.getElementById('aiToggle').checked;
         const keyInput = document.getElementById('apiKeyInput').value.trim();
 
-        GEMINI_API_KEY = keyInput;
+        const activeKey = GEMINI_API_KEY || keyInput;
         if (keyInput) localStorage.setItem('study_quest_gemini_key', keyInput);
 
         if (!topicsText.trim() && useAI) {
@@ -471,15 +468,21 @@
         }
 
         if (useAI) {
+            if (!activeKey) {
+                alert("Please enter your Gemini API Key in the box above to use AI generation!");
+                return;
+            }
             if (generating) return;
             generating = true;
             showLoading();
             try {
-                await generateAIQuest(topicsText);
+                await generateAIQuest(topicsText, activeKey);
             } catch (err) {
                 console.error(err);
                 hideLoading();
-                alert("AI generation failed: " + err.message + "\n\nFalling back to Demo mode.");
+                alert("AI generation failed: " + err.message + "
+
+Falling back to Demo mode.");
                 startDemoQuest();
             }
             hideLoading();
@@ -489,7 +492,7 @@
         }
     }
 
-    async function generateAIQuest(inputText) {
+    async function generateAIQuest(inputText, apiKey) {
         const length = parseInt(document.getElementById('journeyLength').value);
         const difficulty = document.getElementById('journeyDifficulty').value;
         const prompt = `Create a ${length}-chapter educational dungeon game based on these notes: "${inputText.substring(0, 3000)}".
@@ -525,7 +528,7 @@
 
         Also: for every room question and every boss question add "icon" (one relevant emoji) and "imageTopic" (an exact English Wikipedia article title that illustrates the concept, e.g. "Mitochondrion", or "" if none fits). Give each boss an "emoji" (one monster emoji such as 👹 👾 🐉 🧟 👻 💀 🤖 🦑). The LAST chapter's boss is the final boss: give it exactly 6 questions that are harder than the other bosses' questions (it will have a shield bar and a health bar), and give it an "enragedEmoji": a more menacing monster emoji for its second phase. Difficulty level: ${difficulty}.`;
 
-        const textResponse = await callGemini(prompt);
+        const textResponse = await callGemini(prompt, apiKey);
         const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
         if (!jsonMatch) throw new Error('No JSON array found in the response');
         const chapters = JSON.parse(jsonMatch[0]);
@@ -535,40 +538,26 @@
         openEditor();
     }
 
-    // Direct mode (key typed in the page, local testing) or server mode (/api/generate, key stays on the server)
-    async function callGemini(prompt) {
-        if (GEMINI_API_KEY) {
-            let lastErr;
-            for (const model of GEMINI_MODELS) {
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } })
-                });
-                const data = await res.json().catch(() => ({}));
-                if (res.ok) {
-                    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
-                    if (text) return text;
-                    lastErr = new Error(`Gemini returned no text (${model}). ` + JSON.stringify(data.promptFeedback || ''));
-                    continue;
-                }
-                lastErr = new Error(`Gemini error ${res.status} (${model}): ${data?.error?.message || 'unknown'}`);
-                if ([429, 404, 503].includes(res.status)) continue; // try the next model
-                throw lastErr;
+    async function callGemini(prompt, apiKey) {
+        let lastErr;
+        for (const model of GEMINI_MODELS) {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+                if (text) return text;
+                lastErr = new Error(`Gemini returned no text (${model}). ` + JSON.stringify(data.promptFeedback || ''));
+                continue;
             }
+            lastErr = new Error(`Gemini error ${res.status} (${model}): ${data?.error?.message || 'unknown'}`);
+            if ([400, 403, 404, 429, 503].includes(res.status)) continue;
             throw lastErr;
         }
-        let res;
-        try {
-            res = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
-        } catch (e) {
-            throw new Error('Could not reach the quest generator. Run the site with the server (see README).');
-        }
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 404) throw new Error('No server found at /api/generate. Run the site with "netlify dev" (see README), or add #dev to the address to test with your own key.');
-        if (res.status === 429) throw new Error(data.error === 'too_many_requests' ? 'You have generated several quests recently. Please wait a few minutes and try again.' : 'All models are out of quota. Wait a bit and try again, or use fewer chapters.');
-        if (!res.ok || !data.text) throw new Error(data.error || ('Server error ' + res.status));
-        return data.text;
+        throw lastErr;
     }
 
     function validateChapters(ch) {
@@ -635,7 +624,6 @@
     // =========================================================================
     // 3. GAMEPLAY ENGINE & UI
     // =========================================================================
-    // ----- Own questions: import, template, create from scratch -----
     const shuffleArr = a => [...a].sort(() => Math.random() - 0.5);
     function parseCSV(text) {
         const rows = []; let row = [], cur = '', q = false;
@@ -644,14 +632,18 @@
             if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
             else if (c === '"') q = true;
             else if (c === ',') { row.push(cur); cur = ''; }
-            else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; if (row.some(x => x.trim())) rows.push(row); row = []; }
+            else if (c === '
+' || c === '
+') { if (c === '
+' && text[i + 1] === '
+') i++; row.push(cur); cur = ''; if (row.some(x => x.trim())) rows.push(row); row = []; }
             else cur += c;
         }
         row.push(cur); if (row.some(x => x.trim())) rows.push(row);
         return rows;
     }
     function csvToChapters(text) {
-        const rows = parseCSV(text.replace(/^\uFEFF/, ''));
+        const rows = parseCSV(text.replace(/^﻿/, ''));
         if (rows.length < 2) throw new Error('The file needs a header row and at least one question.');
         const h = rows[0].map(x => x.trim().toLowerCase());
         ['chapter', 'question', 'answer'].forEach(n => { if (h.indexOf(n) < 0) throw new Error(`Missing column "${n}". Download the CSV template to see the format.`); });
@@ -709,9 +701,10 @@
             'chapter,section,question,answer,wrong1,wrong2,wrong3,icon,imagetopic',
             'Motion,room,What is the SI unit of force?,Newton,Joule,Watt,Pascal,🚀,Newton (unit)',
             'Motion,room,Roughly what is g on Earth in m/s²?,9.8,,,,🍎,Gravity',
-            'Motion,boss,Which formula is Newton\'s second law?,F = ma,E = mc²,V = IR,,⚖️,Newton\'s laws of motion',
+            'Motion,boss,Which formula is Newton's second law?,F = ma,E = mc²,V = IR,,⚖️,Newton's laws of motion',
             'Motion,boss,Which law is inertia?,First law,Second law,Third law,,🧱,Inertia'
-        ].join('\n');
+        ].join('
+');
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
         a.download = 'study-quest-template.csv';
@@ -920,7 +913,7 @@
         try {
             const r = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(topic.trim().replace(/ /g, '_')));
             if (r.ok) { const d = await r.json(); url = d.thumbnail?.source || null; }
-        } catch (e) { /* offline or blocked: keep the emoji */ }
+        } catch (e) { /* offline or blocked */ }
         imgCache.set(topic, url);
         return url;
     }
@@ -1013,7 +1006,6 @@
         const chapter = gameState.chapters[gameState.currentChapter];
 
         if (gameState.currentRoom < chapter.rooms.length) {
-            // REGULAR ROOM (MCQ OR TYPED)
             const room = chapter.rooms[gameState.currentRoom];
             if (room.type === 'mcq') {
                 container.innerHTML = `
@@ -1049,7 +1041,6 @@
             }
             loadVisual(room);
         } else {
-            // BOSS FIGHT ROOM
             const boss = chapter.boss;
             const bQ = getBossQueue(boss)[0];
 
@@ -1156,7 +1147,7 @@
         document.getElementById('p2Text').textContent = `${boss.name} IS ENRAGED!`;
         b.classList.remove('hidden'); b.classList.add('flex');
         playSFX('roar');
-        wrongEffect(); // red flash + shake
+        wrongEffect();
         setTimeout(() => { b.classList.add('hidden'); b.classList.remove('flex'); done(); }, 1800);
     }
 
@@ -1177,7 +1168,7 @@
             boss.queue = [...boss.questions];
             boss.phase = 1;
             const n = boss.questions.length;
-            if (boss.isFinal && n >= 2) { // final boss: shield phase first, then health phase
+            if (boss.isFinal && n >= 2) {
                 boss.maxShield = Math.ceil(n / 2);
                 boss.shield = boss.maxShield;
                 boss.hp = n - boss.maxShield;
@@ -1201,7 +1192,7 @@
             if (hadShield) { const take = Math.min(boss.shield, dmg); boss.shield -= take; dmg -= take; }
             boss.hp -= dmg;
             const broke = hadShield && boss.shield <= 0;
-            const p2 = broke && boss.hp > 0; // shield gone, fight continues: enter phase 2
+            const p2 = broke && boss.hp > 0;
             if (p2) boss.phase = 2;
             queue.shift();
             addXP();
@@ -1230,7 +1221,7 @@
             document.getElementById('bossIcon').classList.add('boss-shake');
             renderHUD();
             showFeedback(bQ.q, bQ.options[bQ.correct], () => {
-                const go = () => { queue.push(queue.shift()); renderRoom(); }; // missed question returns later
+                const go = () => { queue.push(queue.shift()); renderRoom(); };
                 if (gameState.lives <= 0) { handleGameOver(go); return; }
                 go();
             });
@@ -1239,7 +1230,6 @@
         renderRoom();
     }
 
-    // Red flash + screen shake on any wrong answer
     function wrongEffect() {
         const flash = document.getElementById('damageFlash');
         flash.classList.remove('flash-red'); void flash.offsetWidth; flash.classList.add('flash-red');
