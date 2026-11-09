@@ -180,13 +180,6 @@
                         <option value="hard">Master (Strict bosses)</option>
                     </select>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Generation Speed</label>
-                    <select id="genSpeed" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
-                        <option value="fast" selected>Fast (lighter model)</option>
-                        <option value="quality">Best quality (slower)</option>
-                    </select>
-                </div>
             </div>
 
             <!-- API KEY FIELD (INSERT YOUR KEY HERE OR ON SCREEN) -->
@@ -198,7 +191,7 @@
                         </div>
                         <div>
                             <div class="font-medium text-sm">Gemini API Key</div>
-                            <div id="keyBoxHint" class="text-[11px] text-slate-400">Developer mode: for local testing only. Visitors never see this.</div>
+                            <div class="text-[11px] text-slate-400">Developer mode: for local testing only. Visitors never see this.</div>
                         </div>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -281,7 +274,6 @@
         <div>
             <h2 class="text-2xl font-bold">Review your quest</h2>
             <p class="text-slate-400 text-sm mt-1">AI can make mistakes. Fix any question or answer, and select the radio button next to the correct option. Use &#10005; to remove a question.</p>
-            <p id="genInfo" class="text-xs text-slate-500 mt-1"></p>
         </div>
         <div id="editList" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2"></div>
         <div class="flex flex-col md:flex-row gap-3">
@@ -317,8 +309,7 @@
     <div class="glass-card p-8 rounded-3xl text-center max-w-sm w-full space-y-4">
         <i class="fa-solid fa-circle-notch fa-spin text-4xl text-indigo-400"></i>
         <div class="font-bold text-lg" id="loadingText">Forging your quest...</div>
-        <div class="text-xs text-slate-400">Quests can take up to a minute. More chapters and Master difficulty take longer.</div>
-        <button onclick="cancelGeneration()" class="px-4 py-2 text-sm bg-slate-800 border border-slate-700">Cancel</button>
+        <div class="text-xs text-slate-400">Longer quests can take up to a minute.</div>
     </div>
 </div>
 
@@ -341,21 +332,11 @@
     // =========================================================================
     // 1. CONFIGURATION & STATE
     // =========================================================================
-    let GEMINI_API_KEY = ""; // leave empty. Never hardcode a key in this file: every visitor can read it.
-
-    // ===== DEPLOYMENT SETTINGS =====
-    // Where the quest generator lives.
-    //   Netlify (all-in-one):  '/api/generate'
-    //   GitHub Pages:          your Cloudflare Worker address, e.g. 'https://study-quest-api.yourname.workers.dev'
-    const API_URL = '/api/generate';
-    // true = every visitor gets a box to paste their OWN free Gemini key (kept in their browser). No server needed.
-    const ALLOW_VISITOR_KEYS = true;
+    let GEMINI_API_KEY = ""; // PASTE YOUR GEMINI API KEY HERE IF HARDCODING
 
     // Change this if Google's model list (ai.google.dev/gemini-api/docs/models) says otherwise
     // Tried in order; if one is out of quota (429) or unavailable (404/503), the next is used.
-    const MODELS_FAST = ['gemini-3.1-flash-lite-preview', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
-    const MODELS_QUALITY = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite-preview'];
-    let genInfo = null;
+    const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
     let generating = false;
 
     let gameState = {
@@ -440,11 +421,9 @@
     // Initialize API key input from local storage
     document.addEventListener('DOMContentLoaded', () => {
         // The key box is a developer tool: shown only with #dev or when the file is opened directly from disk
-        if (location.hash === '#dev' || location.protocol === 'file:' || ALLOW_VISITOR_KEYS) { // opening the file directly = developer testing
+        if (location.hash === '#dev' || location.protocol === 'file:') { // opening the file directly = developer testing
             document.getElementById('devKeyBox').classList.remove('hidden');
-            if (ALLOW_VISITOR_KEYS) document.getElementById('keyBoxHint').innerHTML = 'Paste your own free Gemini key. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="underline text-amber-400">Get one here</a>. It stays in your browser and is only sent to Google.';
-            let savedKey = null;
-            try { savedKey = localStorage.getItem('study_quest_gemini_key'); } catch (e) { /* storage blocked */ }
+            const savedKey = localStorage.getItem('study_quest_gemini_key');
             if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
         }
     });
@@ -454,17 +433,11 @@
     document.getElementById('fileInput').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        if (file.size > 5e6) {
-            const st = document.getElementById('fileStatus');
-            st.textContent = 'File too large (5 MB max).'; st.classList.remove('hidden');
-            e.target.value = ''; uploadedText = '';
-            return;
-        }
         const status = document.getElementById('fileStatus');
         status.textContent = `Processing ${file.name}...`;
         status.classList.remove('hidden');
 
-        if (/\.pdf$/i.test(file.name)) {
+        if (file.name.endsWith('.pdf')) {
             const arrayBuffer = await file.arrayBuffer();
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -490,11 +463,7 @@
         const keyInput = document.getElementById('apiKeyInput').value.trim();
 
         GEMINI_API_KEY = keyInput;
-        if (ALLOW_VISITOR_KEYS && useAI && !keyInput) {
-            alert('To generate a quest with AI, paste your own free Gemini API key in the key box (use the link under it to get one), or try the demo or import your own questions.');
-            return;
-        }
-        try { if (keyInput) localStorage.setItem('study_quest_gemini_key', keyInput); } catch (e) { /* storage blocked: fine */ }
+        if (keyInput) localStorage.setItem('study_quest_gemini_key', keyInput);
 
         if (!topicsText.trim() && useAI) {
             alert("Please enter some study topics or upload a file first!");
@@ -510,7 +479,6 @@
             } catch (err) {
                 console.error(err);
                 hideLoading();
-                if (err && err.cancelled) { generating = false; return; }
                 alert("AI generation failed: " + err.message + "\n\nFalling back to Demo mode.");
                 startDemoQuest();
             }
@@ -524,11 +492,12 @@
     async function generateAIQuest(inputText) {
         const length = parseInt(document.getElementById('journeyLength').value);
         const difficulty = document.getElementById('journeyDifficulty').value;
-        const prompt = `Create a ${length}-chapter educational dungeon game based on these notes: "${inputText.substring(0, 12000)}".
+        const prompt = `Create a ${length}-chapter educational dungeon game based on these notes: "${inputText.substring(0, 3000)}".
         Return ONLY a valid JSON array of ${length} objects formatted like this:
         [
           {
             "title": "Chapter 1 Title",
+            "story": "Intro narrative background...",
             "rooms": [
               {
                 "type": "mcq",
@@ -566,84 +535,39 @@
         openEditor();
     }
 
-    let cancelled = false, activeCtrl = null;
-    async function geminiCall(model, prompt, level) {
-        const ctrl = new AbortController(); activeCtrl = ctrl;
-        const timer = setTimeout(() => ctrl.abort(), 50000);
-        try {
-            const generationConfig = { responseMimeType: 'application/json' };
-            if (level) generationConfig.thinkingConfig = { thinkingLevel: level }; // Gemini 3 thinks a lot by default, which is slow
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig }),
-                signal: ctrl.signal
-            });
-            const data = await res.json().catch(() => ({}));
-            return { res, data };
-        } finally { clearTimeout(timer); }
-    }
-    function cancelGeneration() {
-        cancelled = true;
-        if (activeCtrl) activeCtrl.abort();
-        hideLoading();
-        generating = false;
-    }
-
     // Direct mode (key typed in the page, local testing) or server mode (/api/generate, key stays on the server)
     async function callGemini(prompt) {
-        cancelled = false;
-        const t0 = Date.now();
-        const speed = document.getElementById('genSpeed').value;
         if (GEMINI_API_KEY) {
-            let lastErr, authFail = false;
-            const models = speed === 'quality' ? MODELS_QUALITY : MODELS_FAST;
-            const levels = speed === 'quality' ? ['low', null] : ['minimal', 'low', null];
-            for (const model of models) {
-                let out;
-                try {
-                    for (const lv of levels) { // a model that rejects a thinking level (400) gets the next one
-                        out = await geminiCall(model, prompt, lv);
-                        if (out.res.status !== 400) break;
-                    }
-                } catch (e) {
-                    if (cancelled) throw Object.assign(new Error('Cancelled'), { cancelled: true });
-                    lastErr = new Error(`${model} took too long (over 50 seconds) or the connection failed.`);
-                    continue;
-                }
-                const { res, data } = out;
+            let lastErr;
+            for (const model of GEMINI_MODELS) {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } })
+                });
+                const data = await res.json().catch(() => ({}));
                 if (res.ok) {
                     const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
-                    if (text) { genInfo = { model, secs: Math.round((Date.now() - t0) / 1000) }; return text; }
+                    if (text) return text;
                     lastErr = new Error(`Gemini returned no text (${model}). ` + JSON.stringify(data.promptFeedback || ''));
                     continue;
                 }
                 lastErr = new Error(`Gemini error ${res.status} (${model}): ${data?.error?.message || 'unknown'}`);
-                if ([401, 403, 404, 429, 503].includes(res.status)) { // try the next model (some models reject newer AQ. keys with 401)
-                    if (res.status === 401 || res.status === 403) authFail = true;
-                    continue;
-                }
+                if ([429, 404, 503].includes(res.status)) continue; // try the next model
                 throw lastErr;
             }
-            if (authFail && lastErr) lastErr = new Error(lastErr.message + ' | Google rejected the key on every model tried. Check that you copied the whole key, then try again with "Best quality" speed.');
             throw lastErr;
         }
         let res;
         try {
-            const ctrl = new AbortController(); activeCtrl = ctrl;
-            const timer = setTimeout(() => ctrl.abort(), 120000);
-            try { res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, speed }), signal: ctrl.signal }); }
-            finally { clearTimeout(timer); }
+            res = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
         } catch (e) {
-            if (cancelled) throw Object.assign(new Error('Cancelled'), { cancelled: true });
-            throw new Error('Could not reach the quest generator, or it took too long. Run the site with the server (see README).');
+            throw new Error('Could not reach the quest generator. Run the site with the server (see README).');
         }
         const data = await res.json().catch(() => ({}));
-        if (res.status === 504) throw new Error('The server timed out. Hosting time limits can cut off long generations. Try 1 chapter on easier difficulty, or see the README.');
-        if (res.status === 404 || res.status === 405) throw new Error('This website host cannot run the quest generator (static hosts like GitHub Pages have no server). Set API_URL to your Cloudflare Worker address, host on Netlify, or turn on ALLOW_VISITOR_KEYS. See the README.');
+        if (res.status === 404) throw new Error('No server found at /api/generate. Run the site with "netlify dev" (see README), or add #dev to the address to test with your own key.');
         if (res.status === 429) throw new Error(data.error === 'too_many_requests' ? 'You have generated several quests recently. Please wait a few minutes and try again.' : 'All models are out of quota. Wait a bit and try again, or use fewer chapters.');
         if (!res.ok || !data.text) throw new Error(data.error || ('Server error ' + res.status));
-        genInfo = { model: data.model || 'server', secs: Math.round((Date.now() - t0) / 1000) };
         return data.text;
     }
 
@@ -809,14 +733,10 @@
     function showLoading() {
         const o = document.getElementById('loadingOverlay');
         o.classList.remove('hidden'); o.classList.add('flex');
-        const t0 = Date.now();
-        const upd = () => {
-            const sec = Math.round((Date.now() - t0) / 1000);
-            document.getElementById('loadingText').textContent = `${LOADING_MSGS[Math.floor(sec / 3) % LOADING_MSGS.length]} ${sec}s`;
-        };
-        upd();
+        let i = 0;
+        document.getElementById('loadingText').textContent = LOADING_MSGS[0];
         clearInterval(loadingTimer);
-        loadingTimer = setInterval(upd, 1000);
+        loadingTimer = setInterval(() => { i = (i + 1) % LOADING_MSGS.length; document.getElementById('loadingText').textContent = LOADING_MSGS[i]; }, 2500);
     }
     function hideLoading() {
         clearInterval(loadingTimer);
@@ -828,8 +748,6 @@
     const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const INP = 'w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500';
     function openEditor() {
-        document.getElementById('genInfo').textContent = genInfo ? `Generated by ${genInfo.model} in ${genInfo.secs}s` : '';
-        genInfo = null;
         document.getElementById('setupScreen').classList.add('hidden');
         document.getElementById('editScreen').classList.remove('hidden');
         renderEditor();
@@ -1100,14 +1018,14 @@
             if (room.type === 'mcq') {
                 container.innerHTML = `
                     <div class="space-y-4">
-                        <span class="text-xs font-bold text-indigo-400 tracking-wider uppercase">${esc(chapter.title)} • Room ${gameState.currentRoom + 1}</span>
-                        <h3 class="text-xl font-bold">${esc(room.question)}</h3>${visualHTML(room)}
+                        <span class="text-xs font-bold text-indigo-400 tracking-wider uppercase">${chapter.title} • Room ${gameState.currentRoom + 1}</span>
+                        <h3 class="text-xl font-bold">${room.question}</h3>${visualHTML(room)}
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
                         ${room.options.map((opt, idx) => `
                             <button data-idx="${idx}" onclick="answerMCQ(${idx})" class="door-card glass-card p-6 rounded-2xl text-left font-semibold border border-slate-800 hover:border-indigo-500 flex flex-col justify-between space-y-4">
                                 <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs">Door ${['I','II','III','IV','V'][idx] || idx + 1}</div>
-                                <span class="text-sm text-slate-200">${esc(opt)}</span>
+                                <span class="text-sm text-slate-200">${opt}</span>
                             </button>
                         `).join('')}
                     </div>
@@ -1116,8 +1034,8 @@
             } else {
                 container.innerHTML = `
                     <div class="space-y-4">
-                        <span class="text-xs font-bold text-purple-400 tracking-wider uppercase">${esc(chapter.title)} • Room ${gameState.currentRoom + 1}</span>
-                        <h3 class="text-xl font-bold">${esc(room.question)}</h3>${visualHTML(room)}
+                        <span class="text-xs font-bold text-purple-400 tracking-wider uppercase">${chapter.title} • Room ${gameState.currentRoom + 1}</span>
+                        <h3 class="text-xl font-bold">${room.question}</h3>${visualHTML(room)}
                     </div>
                     <div class="my-6 space-y-3">
                         <input type="text" id="typedInput" placeholder="Type your answer here..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-purple-500">
@@ -1137,19 +1055,19 @@
 
             container.innerHTML = `
                 <div class="space-y-4 text-center">
-                    <span class="text-xs font-bold text-red-400 tracking-wider uppercase">${boss.isFinal ? (boss.phase === 2 ? '👑 FINAL BOSS: PHASE 2' : '👑 FINAL BOSS') : 'BOSS BATTLE'} • ${esc(chapter.title)}</span>
+                    <span class="text-xs font-bold text-red-400 tracking-wider uppercase">${boss.isFinal ? (boss.phase === 2 ? '👑 FINAL BOSS: PHASE 2' : '👑 FINAL BOSS') : 'BOSS BATTLE'} • ${chapter.title}</span>
                     <div class="boss-icon${boss.isFinal ? ' final' : ''}${boss.phase === 2 ? ' enraged' : ''}" id="bossIcon">${esc(bossEmoji(boss))}</div>
-                    <h3 class="text-2xl font-black text-red-500" id="bossTitle">${esc(boss.name)}</h3>
+                    <h3 class="text-2xl font-black text-red-500" id="bossTitle">${boss.name}</h3>
                     ${bossBarsHTML(boss)}
                 </div>
 
                 <div class="my-6 glass-card p-6 rounded-2xl border border-red-500/20">
                     ${visualHTML(bQ)}
-                    <p class="font-bold text-base mb-4 mt-3">${esc(bQ.q)}</p>
+                    <p class="font-bold text-base mb-4 mt-3">${bQ.q}</p>
                     <div class="space-y-2">
                         ${bQ.options.map((opt, idx) => `
                             <button data-idx="${idx}" onclick="answerBoss(${idx})" class="boss-answer w-full bg-slate-900/80 hover:bg-red-500/10 border border-slate-800 hover:border-red-500/50 p-3.5 rounded-xl text-left text-sm font-medium transition">
-                                ${esc(opt)}
+                                ${opt}
                             </button>
                         `).join('')}
                     </div>
@@ -1195,7 +1113,6 @@
         val = n(val); target = n(target);
         if (!val) return false;
         if (val === target) return true;
-        if (/^[\d.,\-\/]+$/.test(target)) return false; // numbers: exact only
         if (target.length >= 3 && val.includes(target)) return true;
         return lev(val, target) <= (target.length > 10 ? 2 : target.length > 5 ? 1 : 0);
     }
@@ -1379,8 +1296,8 @@
                 card.className = 'glass-card p-4 rounded-xl border border-slate-800 text-left';
                 card.innerHTML = `
                     <div class="text-xs text-red-400 font-bold">Missed Concept</div>
-                    <div class="text-sm font-semibold text-slate-200 mt-1">${esc(item.q)}</div>
-                    <div class="text-xs text-emerald-400 mt-2 font-medium">Correct Answer: ${esc(item.correct)}</div>
+                    <div class="text-sm font-semibold text-slate-200 mt-1">${item.q}</div>
+                    <div class="text-xs text-emerald-400 mt-2 font-medium">Correct Answer: ${item.correct}</div>
                 `;
                 list.appendChild(card);
             });
